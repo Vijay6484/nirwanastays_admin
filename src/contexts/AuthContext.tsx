@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import bcrypt from 'bcryptjs';
-import { genSalt, hash } from 'bcrypt-ts';
+// import { genSalt, hash } from 'bcrypt-ts';
 
 interface User {
   id: string;
@@ -80,13 +80,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // console.log("Entered password:", testHash);
       // console.log("Stored password:", matchedUser.password);
 
-      // // Check password
-      // const isPasswordMatch = await bcrypt.compare(password, matchedUser.password);
-      // console.log('Password match:', isPasswordMatch);
-      // if (!isPasswordMatch) {
-      //   setIsLoading(false);
-      //   return { success: false };
-      // }
+      // Check password
+      const isPasswordMatch = await bcrypt.compare(password, matchedUser.password);
+      console.log('Password match:', isPasswordMatch);
+      if (!isPasswordMatch) {
+        setIsLoading(false);
+        return { success: false };
+      }
 
       // ✅ Store only this matched user
       const authUser: User = {
