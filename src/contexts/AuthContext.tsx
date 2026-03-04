@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const matchedUser = users.find(
         (u: any) => u.email === email.trim() || u.phoneNumber === email.trim()
       );
-      console.log('Matched user:', matchedUser);
+      // console.log('Matched user:', matchedUser);
       if (!matchedUser) {
         setIsLoading(false);
         return { success: false };
@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Check password
       const isPasswordMatch = await bcrypt.compare(password, matchedUser.password);
-      console.log('Password match:', isPasswordMatch);
+      // console.log('Password match:', isPasswordMatch);
       if (!isPasswordMatch) {
         setIsLoading(false);
         return { success: false };
