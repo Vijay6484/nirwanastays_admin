@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, DollarSign, CreditCard, Smartphone, Tag, AlertCircle } from 'lucide-react';
+import { BASE_URL } from '../config/config';
 
 interface Booking {
   id: number;
@@ -24,7 +25,7 @@ const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   booking, 
   onClose, 
   onPaymentAdded,
-  apiBaseUrl = 'https://api.nirwanastays.com/admin'
+  apiBaseUrl = `${BASE_URL}/admin`
 }) => {
   const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
   const [paymentMethod, setPaymentMethod] = useState('');

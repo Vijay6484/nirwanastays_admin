@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Pencil, XCircle } from "lucide-react";
+import { BASE_URL } from "../config/config";
 
 type Category = {
   id: number;
@@ -17,7 +18,7 @@ const Categories = () => {
     const fetchData = async () => {
       try {
         const response = await fetch(
-          "https://api.nirwanastays.com/admin/properties/accommodations"
+          `${BASE_URL}/admin/properties/accommodations`
         );
         const data = await response.json();
         

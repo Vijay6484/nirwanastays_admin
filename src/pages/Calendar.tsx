@@ -970,9 +970,10 @@ import { useState, useEffect, useRef } from 'react';
 import { format, isBefore, startOfDay, parseISO } from 'date-fns';
 import { Calendar as CalendarIcon, X, Trash2, Edit2, AlertCircle, CheckCircle, Building2 } from 'lucide-react';
 import axios from 'axios';
+import { BASE_URL } from '../config/config';
 
 // API Configuration
-const admin_BASE_URL = 'https://api.nirwanastays.com/admin/calendar';
+const admin_BASE_URL = `${BASE_URL}/admin/calendar`;
 
 interface Accommodation {
   id: number;
@@ -1155,7 +1156,7 @@ const Calendar = () => {
 
   const fetchAccommodations = async () => {
     try {
-      const response = await fetch(`https://api.nirwanastays.com/admin/properties/accommodations`);
+      const response = await fetch(`${BASE_URL}/admin/properties/accommodations`);
       if (!response.ok) throw new Error('Failed to fetch accommodations');
       const data = await response.json();
       if (data.data.length > 0) {
@@ -1171,7 +1172,7 @@ const Calendar = () => {
   const fetchBookedRooms = async (accommodationId: number, checkInDate: string) => {
     try {
       setIsFetchingBookedRooms(true);
-      const response = await fetch(`https://api.nirwanastays.com/admin/bookings/room-occupancy?check_in=${checkInDate}&id=${accommodationId}`);
+      const response = await fetch(`${BASE_URL}/admin/bookings/room-occupancy?check_in=${checkInDate}&id=${accommodationId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch booked rooms');
       }

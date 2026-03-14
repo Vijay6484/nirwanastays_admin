@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Download, Filter, Search, XCircle, DollarSign, Calendar, CreditCard, User, Plus,Trash2} from 'lucide-react';
 import BookingDetailsModal from '../components/BookingDetailsModal';
 import AddPaymentModal from '../components/AddPaymentModal';
+import { BASE_URL} from '../config/config'
 
 interface ApiBooking {
   id: number;
@@ -101,7 +102,7 @@ const Bookings: React.FC = () => {
     totalPages: 1
   });
 
-  const API_BASE_URL = 'https://api.nirwanastays.com/admin';
+  const API_BASE_URL = `${BASE_URL}/admin`;
 
   const mapApiBookingToBooking = (apiBooking: ApiBooking): Booking => {
     let paymentStatus: 'Paid' | 'Partial' | 'Unpaid' | 'Pending' = 'Pending';

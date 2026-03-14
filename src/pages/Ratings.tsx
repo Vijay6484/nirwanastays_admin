@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Star, Building2, User, Calendar, Trash2, Plus, Upload, X, Save, Loader } from 'lucide-react';
+import { BASE_URL } from '../config/config';
 
 interface Rating {
   id: number;
@@ -22,7 +23,7 @@ interface NewRating {
 
 // Axios instance with base configuration
 const api = axios.create({
-  baseURL: 'https://api.nirwanastays.com',
+  baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Grid, Save, Loader } from 'lucide-react';
+import { BASE_URL } from '../config/config'
 
 interface Category {
   id?: number;
@@ -36,7 +37,7 @@ const CategoryForm: React.FC = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('https://api.nirwanastays.com/admin/categories');
+      const response = await fetch(`${BASE_URL}/admin/categories`);
       if (!response.ok) throw new Error('Failed to fetch categories');
       const data = await response.json();
       setCategories(data);
@@ -48,7 +49,7 @@ const CategoryForm: React.FC = () => {
   const fetchCategory = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`https://api.nirwanastays.com/admin/categories/${id}`);
+      const response = await fetch(`${BASE_URL}/admin/categories/${id}`);
       if (!response.ok) throw new Error('Category not found');
       const data = await response.json();
       setFormData(data);
@@ -91,8 +92,8 @@ const CategoryForm: React.FC = () => {
       setError('');
 
       const url = isEditing
-        ? `https://api.nirwanastays.com/admin/categories/${id}`
-        : 'https://api.nirwanastays.com/admin/categories';
+        ? `${BASE_URL}/admin/categories/${id}`
+        : `${BASE_URL}/admin/categories`;
 
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',

@@ -14,6 +14,7 @@ import {
   Users2Icon,
   Phone,
 } from 'lucide-react';
+import { BASE_URL } from '../config/config';
 
 // User Interface
 interface User {
@@ -69,7 +70,7 @@ const Users: React.FC = () => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const response = await fetch('https://api.nirwanastays.com/admin/users');
+        const response = await fetch(`${BASE_URL}/admin/users`);
         if (!response.ok) {
           throw new Error('Failed to fetch users');
         }
@@ -90,7 +91,7 @@ const Users: React.FC = () => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
         setDeletingId(id);
-        const response = await fetch(`https://api.nirwanastays.com/admin/users/${id}`, {
+        const response = await fetch(`${BASE_URL}/admin/users/${id}`, {
           method: 'DELETE',
         });
         if (!response.ok) {
@@ -152,8 +153,8 @@ const Users: React.FC = () => {
       setError('');
 
       const url = editingUser 
-        ? `https://api.nirwanastays.com/admin/users/${editingUser.id}`
-        : 'https://api.nirwanastays.com/admin/users';
+        ? `${BASE_URL}/admin/users/${editingUser.id}`
+        : `${BASE_URL}/admin/users`;
 
       const method = editingUser ? 'PUT' : 'POST';
 

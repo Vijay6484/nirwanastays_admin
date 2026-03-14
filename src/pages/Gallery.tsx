@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Image, Search, Filter, UploadCloud, XCircle, Trash2, Edit, Eye, AlertCircle, CheckCircle } from 'lucide-react';
+import { BASE_URL } from '../config/config';
 
 interface GalleryImage {
   id: string;
@@ -48,7 +49,7 @@ const Gallery = () => {
     alt_text: '',
     description: ''
   });
-  const API_BASE_URL = 'https://api.nirwanastays.com'; // Commented out API URL
+  const API_BASE_URL = BASE_URL; // Commented out API URL
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
 
   const filters = [

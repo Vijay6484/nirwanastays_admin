@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Building2, User, CreditCard, UtensilsCrossed } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { BASE_URL } from '../config/config';
 
 
 interface Accommodation {
@@ -40,8 +41,6 @@ interface BlockedDate {
   adult_price?: number | null;
   child_price?: number | null;
 }
-
-const _BASE_URL = 'https://api.nirwanastays.com';
 
 const CreateBooking: React.FC = () => {
   const navigate = useNavigate();
@@ -92,7 +91,7 @@ const CreateBooking: React.FC = () => {
     const fetchAccommodations = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${_BASE_URL}/admin/properties/accommodations`);
+        const response = await fetch(`${BASE_URL}/admin/properties/accommodations`);
         const data = await response.json();
 
         const accommodationsData = data.data || [];
@@ -116,7 +115,7 @@ const CreateBooking: React.FC = () => {
   useEffect(() => {
     const fetchBlockedDates = async () => {
       try {
-        const response = await fetch(`${_BASE_URL}/admin/calendar/blocked-dates`);
+        const response = await fetch(`${BASE_URL}/admin/calendar/blocked-dates`);
         const data = await response.json();
         if (data.success && Array.isArray(data.data)) {
           setBlockedDates(data.data);
@@ -137,7 +136,7 @@ const CreateBooking: React.FC = () => {
       }
 
       try {
-        const response = await fetch(`${_BASE_URL}/admin/coupons`);
+        const response = await fetch(`${BASE_URL}/admin/coupons`);
         const data = await response.json();
 
         if (data.success && Array.isArray(data.data)) {
@@ -179,7 +178,7 @@ const CreateBooking: React.FC = () => {
 
   const fetchAccommodationDetails = async (id: string) => {
     try {
-      const response = await fetch(`${_BASE_URL}/admin/properties/accommodations/${id}`);
+      const response = await fetch(`${BASE_URL}/admin/properties/accommodations/${id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch accommodation details');
       }
@@ -210,7 +209,7 @@ const CreateBooking: React.FC = () => {
 
   const fetchBookedRooms = async (accommodationId: number, checkInDate: string) => {
     try {
-      const response = await fetch(`${_BASE_URL}/admin/bookings/room-occupancy?check_in=${checkInDate}&id=${accommodationId}`);
+      const response = await fetch(`${BASE_URL}/admin/bookings/room-occupancy?check_in=${checkInDate}&id=${accommodationId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch booked rooms');
       }
@@ -258,7 +257,7 @@ const CreateBooking: React.FC = () => {
       // Validate coupon via API (backend stores codes in uppercase)
       const couponCodeToSearch = formData.coupon_code.trim().toUpperCase();
       const response = await fetch(
-        `${_BASE_URL}/admin/coupons?search=${encodeURIComponent(couponCodeToSearch)}`
+        `${BASE_URL}/admin/coupons?search=${encodeURIComponent(couponCodeToSearch)}`
       );
       const result = await response.json();
 
@@ -1292,7 +1291,7 @@ const CreateBooking: React.FC = () => {
         advance_amount: parseFloat(formData.advance_amount || '0'),
       };
       console.log(bookingPayload);
-      const response = await fetch(`${_BASE_URL}/admin/bookings/offline`, {
+      const response = await fetch(`${BASE_URL}/admin/bookings/offline`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

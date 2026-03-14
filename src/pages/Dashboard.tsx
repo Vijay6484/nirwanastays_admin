@@ -10,6 +10,7 @@ import {
   RefreshCw,
   AlertCircle
 } from 'lucide-react';
+import { BASE_URL } from '../config/config';
 
 // StatCard Component
 type StatCardProps = {
@@ -262,7 +263,7 @@ const Dashboard = () => {
     recentBookings: null as string | null
   });
 
-  const admin_BASE_URL = 'https://api.nirwanastays.com/admin';
+  const admin_BASE_URL = `${BASE_URL}/admin`;
   const RETRY_DELAY = 3000; // 3 seconds
   const MAX_RETRIES = 3;
   const REQUEST_TIMEOUT = 8000; // 8 seconds

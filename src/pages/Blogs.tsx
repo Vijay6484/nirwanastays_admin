@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, Edit2, XCircle, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { BASE_URL } from '../config/config'
 
-const API_BASE_URL = 'https://api.nirwanastays.com/admin/blogs';
+const API_BASE_URL = `${BASE_URL}/admin/blogs`;
 
 interface Blog {
   id: number;
@@ -129,7 +130,7 @@ const Blogs: React.FC = () => {
   const getImageUrl = (image: string) => {
     if (!image) return 'https://images.pexels.com/photos/2666598/pexels-photo-2666598.jpeg';
     if (image.startsWith('http')) return image;
-    if (image.startsWith('/uploads')) return `https://api.nirwanastays.com${image}`;
+    if (image.startsWith('/uploads')) return `${BASE_URL}${image}`;
     return image;
   };
 

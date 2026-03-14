@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import axios from "axios";
 import DOMPurify from "dompurify";
+import { BASE_URL } from "../config/config";
 interface Accommodation {
   id: number;
   name: string;
@@ -114,7 +115,7 @@ const Accommodations: React.FC = () => {
     ALLOWED_ATTR: ["href", "target", "rel"],
   };
 
-  const API_BASE_URL = "https://api.nirwanastays.com/admin/properties";
+  const API_BASE_URL = `${BASE_URL}/admin/properties`;
 
   // Fetch accommodations from backend
   useEffect(() => {

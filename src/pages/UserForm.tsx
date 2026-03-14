@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, Save, Loader, Upload } from 'lucide-react';
+import { BASE_URL } from '../config/config'
 
 interface UserData {
   name: string;
@@ -38,7 +39,7 @@ const UserForm: React.FC = () => {
   const fetchUser = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`https://api.nirwanastays.com/admin/users/${id}`);
+      const response = await fetch(`${BASE_URL}/admin/users/${id}`);
       if (!response.ok) throw new Error('User not found');
       const data = await response.json();
       setFormData({
@@ -82,8 +83,8 @@ const UserForm: React.FC = () => {
       }
 
       const url = isEditing
-        ? `https://api.nirwanastays.com/admin/users/${id}`
-        : 'https://api.nirwanastays.com/admin/users';
+        ? `${BASE_URL}/admin/users/${id}`
+        : `${BASE_URL}/admin/users`;
 
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import bcrypt from 'bcryptjs';
 // import { genSalt, hash } from 'bcrypt-ts';
+import {BASE_URL} from '../config/config'
 
 interface User {
   id: string;
@@ -45,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let users: any[] = [];
 
       // Always try fresh API call
-      const response = await fetch('https://api.nirwanastays.com/admin/users');
+      const response = await fetch(`${BASE_URL}/admin/users`);
       if (response.ok) {
         users = await response.json();
       }

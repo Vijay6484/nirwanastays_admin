@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Wifi, Music, UtensilsCrossed, Flame, Coffee, Plus, Trash2, Edit, Snowflake, ThermometerSun, ParkingCircle, TreePine, Flower2, CupSoda, Waves } from 'lucide-react';
+import { BASE_URL } from '../config/config';
 interface Amenity {
   id: number;
   name: string;
@@ -7,7 +8,7 @@ interface Amenity {
   active: boolean;
 }
 
-const API_BASE_URL = 'https://api.nirwanastays.com/admin/amenities';
+const API_BASE_URL = `${BASE_URL}/admin/amenities`;
 
 const Amenities = () => {
   const [amenities, setAmenities] = useState<Amenity[]>([]);

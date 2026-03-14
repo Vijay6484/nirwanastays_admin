@@ -4,6 +4,7 @@ import {
   Calendar, Users, Percent, Copy, Check as CheckIcon, IndianRupee
 } from 'lucide-react';
 import axios from 'axios';
+import { BASE_URL } from '../config/config'
 
 interface Coupon {
   id: number;
@@ -39,7 +40,7 @@ interface Accommodation {
   id: number;
   name: string
 }
-const API_BASE_URL = 'https://api.nirwanastays.com/admin';
+const API_BASE_URL = `${BASE_URL}/admin`;
 
 const defaultCoupon: CouponFormData = {
   code: '',

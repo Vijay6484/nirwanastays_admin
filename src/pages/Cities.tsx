@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Plus, Trash2, Edit } from 'lucide-react';
+import { BASE_URL } from '../config/config';
 
 interface Location {
   id: number;
@@ -21,7 +22,7 @@ const Locations = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const API_BASE_URL = 'https://api.nirwanastays.com/admin/cities';
+  const API_BASE_URL = `${BASE_URL}/admin/cities`;
 
   // Fetch locations from the server
   useEffect(() => {

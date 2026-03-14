@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Upload, Loader, AlertCircle, Image as ImageIcon, Plus, Trash2, XCircle, CheckCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { BASE_URL} from '../config/config'
 
-const API_BASE_URL = 'https://api.nirwanastays.com/admin/blogs';
+const API_BASE_URL = `${BASE_URL}/admin/blogs`;
 
 interface ContentItem {
   type: 'paragraph' | 'heading' | 'list';
@@ -332,7 +333,7 @@ const BlogForm: React.FC = () => {
   const getImageUrl = (image: string) => {
     if (!image) return '';
     if (image.startsWith('http')) return image;
-    if (image.startsWith('/uploads')) return `https://api.nirwanastays.com${image}`;
+    if (image.startsWith('/uploads')) return `${BASE_URL}${image}`;
     return image;
   };
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Coffee, Save, Loader, AlertCircle, Upload } from 'lucide-react';
+import { BASE_URL } from '../config/config';
 
-const API_BASE_URL =  'https://api.nirwanastays.com/admin';
+const API_BASE_URL =  `${BASE_URL}/admin`;
 
 const ServiceForm = () => {
   // Get ID from URL params (simulate useParams)
