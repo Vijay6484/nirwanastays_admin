@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-// import { toast } from "react-toastify";
 import { BASE_URL } from "../../config/config";
 import AccommodationImageModal from "./AccommodationImageModal";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PropertyImage {
     imageId: number;
@@ -33,7 +32,7 @@ interface PropertyImagesProps {
     accommodationId: number;
 }
 
-// ─── API ─────────────────────────────────────────────────────────────────────
+// ─── API ──────────────────────────────────────────────────────────────────────
 
 const fetchImages = async (
     accommodationId: number,
@@ -49,7 +48,6 @@ const fetchImages = async (
 const updateImagePositions = async (
     positions: PositionUpdate[],
 ): Promise<void> => {
-    console.log(positions);
     const response = await fetch(
         `${BASE_URL}/admin/properties/accommodations/images-position-reorder`,
         {
@@ -61,7 +59,56 @@ const updateImagePositions = async (
     if (!response.ok) throw new Error("Failed to update positions");
 };
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Floating clone helper ────────────────────────────────────────────────────
+
+/**
+ * Creates a visual clone that follows the user's finger during a touch drag.
+ * Returns a cleanup function that removes the clone.
+ */
+function createDragClone(
+    sourceEl: HTMLElement,
+    startX: number,
+    startY: number,
+): {
+    move: (x: number, y: number) => void;
+    destroy: () => void;
+} {
+    const rect = sourceEl.getBoundingClientRect();
+    const clone = sourceEl.cloneNode(true) as HTMLElement;
+
+    const offsetX = startX - rect.left;
+    const offsetY = startY - rect.top;
+
+    Object.assign(clone.style, {
+        position: "fixed",
+        left: `${startX - offsetX}px`,
+        top: `${startY - offsetY}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        opacity: "0.85",
+        pointerEvents: "none",
+        zIndex: "9999",
+        transform: "scale(1.05) rotate(1.5deg)",
+        transformOrigin: `${offsetX}px ${offsetY}px`,
+        boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+        borderRadius: "12px",
+        transition: "none",
+    });
+
+    document.body.appendChild(clone);
+
+    return {
+        move(x: number, y: number) {
+            clone.style.left = `${x - offsetX}px`;
+            clone.style.top = `${y - offsetY}px`;
+        },
+        destroy() {
+            clone.remove();
+        },
+    };
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PropertyImages({
     accommodationId,
@@ -73,122 +120,66 @@ export default function PropertyImages({
     const [toast, setToast] = useState<Toast | null>(null);
     const [openUploadImageModal, setOpenUploadImageModal] = useState(false);
 
+    // Stable refs — avoids stale closures inside touch event listeners
     const dragIdRef = useRef<number | null>(null);
     const overIdRef = useRef<number | null>(null);
     const imagesRef = useRef<PropertyImage[]>(images);
+    const cloneRef = useRef<ReturnType<typeof createDragClone> | null>(null);
 
-    // Sync refs with state
     useEffect(() => {
         dragIdRef.current = dragId;
     }, [dragId]);
-
     useEffect(() => {
         overIdRef.current = overId;
     }, [overId]);
-
     useEffect(() => {
         imagesRef.current = images;
     }, [images]);
 
-    // ─── Touch drag handlers ──────────────────────────────────────────────
+    // ─── Utilities ───────────────────────────────────────────────────────────
 
-    const onTouchStart = (e: React.TouchEvent<HTMLDivElement>, id: number) => {
-        e.preventDefault(); // Prevent page scroll
-        setDragId(id);
-        setOverId(null);
-    };
+    const showToast = useCallback(
+        (msg: string, type: Toast["type"] = "success") => {
+            setToast({ msg, type });
+            setTimeout(() => setToast(null), 2200);
+        },
+        [],
+    );
 
-    // This effect sets up global touchmove/touchend listeners when a drag is active
-    useEffect(() => {
-        if (dragId === null) return; // No active drag
-
-        const onTouchMove = (e: TouchEvent) => {
-            e.preventDefault(); // Stop scrolling while dragging
-            const touch = e.touches[0];
-            if (!touch) return;
-
-            // Find the draggable element under the finger
-            const element = document.elementFromPoint(
-                touch.clientX,
-                touch.clientY,
-            );
-            const draggableItem = element?.closest('[data-draggable="true"]');
-            if (draggableItem) {
-                const idAttr = draggableItem.getAttribute("data-image-id");
-                if (idAttr) {
-                    const id = Number(idAttr);
-                    setOverId(id !== dragIdRef.current ? id : null);
-                } else {
-                    setOverId(null);
-                }
-            } else {
-                setOverId(null);
-            }
-        };
-
-        const onTouchEnd = (e: TouchEvent) => {
-            e.preventDefault();
-            const fromId = dragIdRef.current;
-            const toId = overIdRef.current;
-
-            if (fromId !== null && toId !== null && fromId !== toId) {
-                // Perform reorder using the current images array
-                const reordered = [...imagesRef.current];
-                const fromIdx = reordered.findIndex(
-                    (i) => i.imageId === fromId,
+    const persistOrder = useCallback(
+        async (updated: PropertyImage[]) => {
+            try {
+                setLoading(true);
+                const payload: PositionUpdate[] = updated.map(
+                    ({ imageId, imgPosition }) => ({ imageId, imgPosition }),
                 );
-                const toIdx = reordered.findIndex((i) => i.imageId === toId);
-                if (fromIdx !== -1 && toIdx !== -1) {
-                    const [moved] = reordered.splice(fromIdx, 1);
-                    reordered.splice(toIdx, 0, moved);
-                    const updated = reordered.map((img, idx) => ({
-                        ...img,
-                        imgPosition: idx + 1,
-                    }));
-                    setImages(updated);
-
-                    // Send updated positions to the API
-                    (async () => {
-                        try {
-                            setLoading(true);
-                            const payload: PositionUpdate[] = updated.map(
-                                ({ imageId, imgPosition }) => ({
-                                    imageId,
-                                    imgPosition,
-                                }),
-                            );
-                            await updateImagePositions(payload);
-                            showToast("✓ Image order saved");
-                        } catch {
-                            showToast("⚠ Failed to save order", "error");
-                        } finally {
-                            setLoading(false);
-                        }
-                    })();
-                }
+                await updateImagePositions(payload);
+                showToast("✓ Image order saved");
+            } catch {
+                showToast("⚠ Failed to save order", "error");
+            } finally {
+                setLoading(false);
             }
+        },
+        [showToast],
+    );
 
-            // End drag session
-            setDragId(null);
-            setOverId(null);
-        };
+    const reorder = useCallback(
+        (fromId: number, toId: number): PropertyImage[] => {
+            const list = [...imagesRef.current];
+            const fromIdx = list.findIndex((i) => i.imageId === fromId);
+            const toIdx = list.findIndex((i) => i.imageId === toId);
+            if (fromIdx === -1 || toIdx === -1) return list;
+            const [moved] = list.splice(fromIdx, 1);
+            list.splice(toIdx, 0, moved);
+            return list.map((img, idx) => ({ ...img, imgPosition: idx + 1 }));
+        },
+        [],
+    );
 
-        // Attach global listeners
-        window.addEventListener("touchmove", onTouchMove, { passive: false });
-        window.addEventListener("touchend", onTouchEnd);
-        window.addEventListener("touchcancel", onTouchEnd);
+    // ─── Data loading ─────────────────────────────────────────────────────────
 
-        // Cleanup when drag ends (dragId becomes null) or component unmounts
-        return () => {
-            window.removeEventListener("touchmove", onTouchMove);
-            window.removeEventListener("touchend", onTouchEnd);
-            window.removeEventListener("touchcancel", onTouchEnd);
-        };
-    }, [dragId]); // Only re‑run when dragId changes
-
-    // ── Fetch on mount ──
-
-    const loadImages = async () => {
+    const loadImages = useCallback(async () => {
         try {
             setLoading(true);
             const data = await fetchImages(accommodationId);
@@ -198,100 +189,177 @@ export default function PropertyImages({
         } finally {
             setLoading(false);
         }
-    };
+    }, [accommodationId, showToast]);
+
     useEffect(() => {
         loadImages();
-    }, [accommodationId]);
+    }, [loadImages]);
 
-    const showToast = (msg: string, type: Toast["type"] = "success") => {
-        setToast({ msg, type });
-        setTimeout(() => setToast(null), 2200);
-    };
-
-    // ─── Drag & Drop ─────────────────────────────────────────────────────────────
+    // ─── Mouse / Desktop drag handlers ───────────────────────────────────────
 
     const handleDragStart = (
         e: React.DragEvent<HTMLDivElement>,
         id: number,
-    ): void => {
+    ) => {
         setDragId(id);
         e.dataTransfer.effectAllowed = "move";
     };
 
-    const handleDragOver = (
-        e: React.DragEvent<HTMLDivElement>,
-        id: number,
-    ): void => {
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>, id: number) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-        setOverId(id);
+        if (id !== dragIdRef.current) setOverId(id);
     };
 
     const handleDrop = async (
         e: React.DragEvent<HTMLDivElement>,
         targetId: number,
-    ): Promise<void> => {
+    ) => {
         e.preventDefault();
-        if (dragId === null || dragId === targetId) {
+        const fromId = dragIdRef.current;
+        setDragId(null);
+        setOverId(null);
+        if (fromId === null || fromId === targetId) return;
+        const updated = reorder(fromId, targetId);
+        setImages(updated);
+        await persistOrder(updated);
+    };
+
+    const handleDragEnd = () => {
+        setDragId(null);
+        setOverId(null);
+    };
+
+    // ─── Touch drag handlers ──────────────────────────────────────────────────
+    //
+    //  Key fixes vs. the original implementation:
+    //
+    //  1. GHOST BLOCKING HIT-TEST: The dragged card was intercepting
+    //     elementFromPoint. We temporarily hide it (visibility:hidden) during
+    //     the move so the element underneath is found correctly, then restore it.
+    //
+    //  2. FLOATING CLONE: A visual clone now follows the finger so the user has
+    //     clear feedback about what they're dragging.
+    //
+    //  3. iOS SAFE AREA / SCROLL: touchAction:"none" was already on each card,
+    //     but we also need it on the scroll container to prevent the page from
+    //     hijacking the gesture mid-drag.
+    //
+    //  4. TOUCHCANCEL: Now calls the same cleanup path as touchend.
+
+    const onTouchStart = useCallback(
+        (e: React.TouchEvent<HTMLDivElement>, id: number) => {
+            // Only respond to single-finger touches to allow normal scrolling
+            // outside of cards
+            if (e.touches.length !== 1) return;
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            const target = e.currentTarget as HTMLElement;
+
+            // Build the floating clone
+            cloneRef.current = createDragClone(
+                target,
+                touch.clientX,
+                touch.clientY,
+            );
+
+            // Mark the original as "invisible" so elementFromPoint can see through it
+            target.style.visibility = "hidden";
+
+            setDragId(id);
+            setOverId(null);
+        },
+        [],
+    );
+
+    // Global touch listeners — registered only while a drag is active
+    useEffect(() => {
+        if (dragId === null) return;
+
+        const draggedEl = document.querySelector<HTMLElement>(
+            `[data-image-id="${dragId}"]`,
+        );
+
+        const onTouchMove = (e: TouchEvent) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            if (!touch) return;
+
+            // Move the clone
+            cloneRef.current?.move(touch.clientX, touch.clientY);
+
+            // The dragged card is visibility:hidden — elementFromPoint now sees
+            // the card beneath the finger correctly
+            const element = document.elementFromPoint(
+                touch.clientX,
+                touch.clientY,
+            );
+            const draggableItem = element?.closest<HTMLElement>(
+                '[data-draggable="true"]',
+            );
+            const idAttr = draggableItem?.getAttribute("data-image-id");
+            const hoverId = idAttr ? Number(idAttr) : null;
+            setOverId(hoverId !== dragIdRef.current ? hoverId : null);
+        };
+
+        const finalizeDrag = (e: TouchEvent) => {
+            e.preventDefault();
+
+            // Destroy clone
+            cloneRef.current?.destroy();
+            cloneRef.current = null;
+
+            // Restore the original card's visibility
+            if (draggedEl) draggedEl.style.visibility = "";
+
+            const fromId = dragIdRef.current;
+            const toId = overIdRef.current;
+
             setDragId(null);
             setOverId(null);
-            return;
-        }
 
-        const reordered = [...images];
-        const fromIdx = reordered.findIndex((i) => i.imageId === dragId);
-        const toIdx = reordered.findIndex((i) => i.imageId === targetId);
-        const [moved] = reordered.splice(fromIdx, 1);
-        reordered.splice(toIdx, 0, moved);
+            if (fromId !== null && toId !== null && fromId !== toId) {
+                const updated = reorder(fromId, toId);
+                setImages(updated);
+                persistOrder(updated);
+            }
+        };
 
-        const updated: PropertyImage[] = reordered.map((img, idx) => ({
-            ...img,
-            imgPosition: idx + 1,
-        }));
+        window.addEventListener("touchmove", onTouchMove, { passive: false });
+        window.addEventListener("touchend", finalizeDrag, { passive: false });
+        window.addEventListener("touchcancel", finalizeDrag, {
+            passive: false,
+        });
 
-        setImages(updated);
-        setDragId(null);
-        setOverId(null);
+        return () => {
+            window.removeEventListener("touchmove", onTouchMove);
+            window.removeEventListener("touchend", finalizeDrag);
+            window.removeEventListener("touchcancel", finalizeDrag);
+        };
+    }, [dragId, reorder, persistOrder]);
 
+    // ─── Delete ───────────────────────────────────────────────────────────────
+
+    const handleDelete = async (id: number) => {
         try {
-            setLoading(true);
-            const payload: PositionUpdate[] = updated.map(
-                ({ imageId, imgPosition }) => ({
-                    imageId,
-                    imgPosition,
-                }),
+            await axios.delete(
+                `${BASE_URL}/admin/properties/accommodations/delete-image/${id}`,
             );
-            await updateImagePositions(payload);
-            showToast("✓ Image order saved");
+            setImages((prev) =>
+                prev
+                    .filter((i) => i.imageId !== id)
+                    .map((img, idx) => ({ ...img, imgPosition: idx + 1 })),
+            );
+            showToast("✓ Image deleted");
         } catch {
-            showToast("⚠ Failed to save order", "error");
-        } finally {
-            setLoading(false);
+            showToast("⚠ Failed to delete image", "error");
         }
     };
 
-    const handleDragEnd = (): void => {
-        setDragId(null);
-        setOverId(null);
-    };
-
-    // ─── Delete ──────────────────────────────────────────────────────────────────
-
-    const handleDelete = async (id: number): void => {
-        await axios.delete(
-            `${BASE_URL}/admin/properties/accommodations/delete-image/${id}`,
-        );
-        setImages((prev) =>
-            prev
-                .filter((i) => i.imageId !== id)
-                .map((img, idx) => ({ ...img, imgPosition: idx + 1 })),
-        );
-    };
-
-    // ─── Upload ──────────────────────────────────────────────────────────────────
+    // ─── Upload ───────────────────────────────────────────────────────────────
 
     const handleUploadImage = async (uploadImageData: PropertyImage) => {
-        // console.log(uploadImageData);
         const imgURL = await getImageUrl(uploadImageData.file);
         if (!imgURL) return;
         const submitData = {
@@ -303,7 +371,6 @@ export default function PropertyImages({
             imgPosition: uploadImageData.imgPosition,
             imgTitle: uploadImageData.imgTitle,
         };
-        console.log(submitData);
         const response = await axios.post(
             `${BASE_URL}/admin/properties/accommodations/upload-image`,
             submitData,
@@ -319,30 +386,23 @@ export default function PropertyImages({
         }
     };
 
-    const getImageUrl = async (file) => {
-        if (file.length === 0) return;
-
+    const getImageUrl = async (file: File): Promise<string | undefined> => {
+        if (!file) return;
         const formDataFile = new FormData();
         formDataFile.append("image", file);
         const res = await axios.post(
             "https://plumeriaretreat.com/upload.php",
             formDataFile,
-            {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
-            },
+            { headers: { "Content-Type": "multipart/form-data" } },
         );
-        if (res.data.success) {
-            return res.data.url;
-        }
+        if (res.data.success) return res.data.url;
     };
 
-    const handleEditImage = (imageId) => {
+    const handleEditImage = (imageId: number) => {
         console.log("edit image with id:", imageId);
     };
 
-    // ─── Render ──────────────────────────────────────────────────────────────────
+    // ─── Render ───────────────────────────────────────────────────────────────
 
     return (
         <div className="max-w-5xl mx-auto px-6 py-8 font-sans">
@@ -387,14 +447,16 @@ export default function PropertyImages({
                     accommodationId={accommodationId}
                     onClose={() => setOpenUploadImageModal(false)}
                     onSuccess={(payload) => {
-                        // console.log("Uploaded:", payload);
                         handleUploadImage(payload);
                         setOpenUploadImageModal(false);
                     }}
                 />
             )}
 
-            {/* Grid */}
+            {/* Grid
+                touchAction:"none" on the container prevents the browser from
+                claiming the touch gesture for page scrolling when a drag starts
+                inside the grid. */}
             {images.length === 0 && !loading ? (
                 <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-zinc-200 text-zinc-400">
                     <svg
@@ -428,7 +490,10 @@ export default function PropertyImages({
                     </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div
+                    className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+                    style={{ touchAction: "none" }}
+                >
                     {images.map((img) => {
                         const isDragging = dragId === img.imageId;
                         const isOver =
@@ -437,7 +502,9 @@ export default function PropertyImages({
                         return (
                             <div
                                 key={img.imageId}
-                                draggable // keep for mouse users
+                                draggable
+                                data-draggable="true"
+                                data-image-id={img.imageId}
                                 onDragStart={(e) =>
                                     handleDragStart(e, img.imageId)
                                 }
@@ -448,11 +515,9 @@ export default function PropertyImages({
                                 onDragEnd={handleDragEnd}
                                 onTouchStart={(e) =>
                                     onTouchStart(e, img.imageId)
-                                } // new
-                                data-draggable="true" // new
-                                data-image-id={img.imageId} // new
+                                }
                                 className={[
-                                    "relative rounded-xl overflow-hidden bg-white shadow-sm cursor-grab active:cursor-grabbing transition-all duration-150 group",
+                                    "relative rounded-xl overflow-hidden bg-white shadow-sm cursor-grab active:cursor-grabbing transition-all duration-150 group select-none",
                                     isDragging
                                         ? "opacity-30 scale-95"
                                         : "hover:-translate-y-1 hover:shadow-lg",
@@ -460,7 +525,7 @@ export default function PropertyImages({
                                         ? "ring-2 ring-indigo-500 ring-offset-2 bg-indigo-50"
                                         : "",
                                 ].join(" ")}
-                                style={{ touchAction: "none" }} // optional, reinforces prevention of scroll
+                                style={{ touchAction: "none" }}
                             >
                                 {/* Image */}
                                 <div className="relative h-36 overflow-hidden">
@@ -473,19 +538,21 @@ export default function PropertyImages({
                                         ) => {
                                             e.currentTarget.src = `https://placehold.co/400x280/e4e4e7/71717a?text=Image+${img.imgPosition}`;
                                         }}
+                                        draggable={false}
                                     />
 
-                                    {/* Drag handle */}
-                                    <div className="absolute top-2 left-2 w-7 h-7 rounded-md bg-black/50 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity select-none">
+                                    {/* Drag handle — always visible on mobile (no hover) */}
+                                    <div className="absolute top-2 left-2 w-7 h-7 rounded-md bg-black/50 text-white flex items-center justify-center text-xs opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity select-none pointer-events-none">
                                         ⠿
                                     </div>
 
-                                    {/* Delete */}
+                                    {/* Delete — always visible on mobile */}
                                     <button
-                                        onClick={() =>
-                                            handleDelete(img.imageId)
-                                        }
-                                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-500 text-white border-2 border-white flex items-center justify-center text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 hover:bg-red-600"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(img.imageId);
+                                        }}
+                                        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-500 text-white border-2 border-white flex items-center justify-center text-sm font-bold opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:scale-110 hover:bg-red-600"
                                         aria-label={`Remove ${img.imgTitle}`}
                                     >
                                         ×
@@ -500,14 +567,6 @@ export default function PropertyImages({
                                 </div>
 
                                 {/* Caption */}
-                                {/* <div className="px-3 py-2.5">
-                                    <p className="text-xs font-semibold text-zinc-800 truncate">
-                                        {img.imgTitle}
-                                    </p>
-                                    <p className="text-[10px] text-zinc-400 mt-0.5">
-                                        {img.accommCategory}
-                                    </p>
-                                </div> */}
                                 <div className="px-3 py-2.5 flex items-start justify-between">
                                     <div className="min-w-0">
                                         <p className="text-xs font-semibold text-zinc-800 truncate">
@@ -519,10 +578,11 @@ export default function PropertyImages({
                                     </div>
 
                                     <button
-                                        className="ml-2  text-zinc-500 hover:text-zinc-700"
-                                        onClick={() =>
-                                            handleEditImage(img.imageId)
-                                        }
+                                        className="ml-2 text-zinc-500 hover:text-zinc-700"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEditImage(img.imageId);
+                                        }}
                                     >
                                         ✏️
                                     </button>
@@ -530,6 +590,30 @@ export default function PropertyImages({
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Loading overlay */}
+            {loading && (
+                <div className="fixed inset-0 bg-black/10 z-40 flex items-center justify-center pointer-events-none">
+                    <div className="bg-white rounded-xl px-5 py-3 shadow-lg text-sm text-zinc-600 font-medium flex items-center gap-2">
+                        <svg
+                            className="w-4 h-4 animate-spin text-blue-600"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                        >
+                            <circle
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                                strokeDasharray="32"
+                                strokeDashoffset="12"
+                            />
+                        </svg>
+                        Saving…
+                    </div>
                 </div>
             )}
 
