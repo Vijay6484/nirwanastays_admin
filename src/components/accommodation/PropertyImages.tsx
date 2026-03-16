@@ -74,19 +74,32 @@ export default function PropertyImages({
     const [openUploadImageModal, setOpenUploadImageModal] = useState(false);
 
     // ── Fetch on mount ──
+
+    const loadImages = async () => {
+        try {
+            setLoading(true);
+            const data = await fetchImages(accommodationId);
+            setImages(data.sort((a, b) => a.imgPosition - b.imgPosition));
+        } catch {
+            showToast("Failed to load images", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
     useEffect(() => {
-        const load = async () => {
-            try {
-                setLoading(true);
-                const data = await fetchImages(accommodationId);
-                setImages(data.sort((a, b) => a.imgPosition - b.imgPosition));
-            } catch {
-                showToast("Failed to load images", "error");
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
+        // const load = async () => {
+        //     try {
+        //         setLoading(true);
+        //         const data = await fetchImages(accommodationId);
+        //         setImages(data.sort((a, b) => a.imgPosition - b.imgPosition));
+        //     } catch {
+        //         showToast("Failed to load images", "error");
+        //     } finally {
+        //         setLoading(false);
+        //     }
+        // };
+        // load();
+        loadImages();
     }, [accommodationId]);
 
     const showToast = (msg: string, type: Toast["type"] = "success") => {
@@ -196,6 +209,7 @@ export default function PropertyImages({
         );
         if (response.data.success) {
             showToast("Image uploaded successfully!!!");
+            loadImages();
         } else {
             showToast(
                 response.data.message || "Failed to upload image.",

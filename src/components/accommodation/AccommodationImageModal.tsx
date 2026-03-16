@@ -276,7 +276,6 @@ const AccommodationImageModal: React.FC<AccommodationImageModalProps> = ({
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm"
             style={{ animation: "fadeIn 0.2s ease" }}
-            onClick={(e) => e.target === e.currentTarget && onClose()}
         >
             <div
                 className="relative w-full max-w-[490px] mx-4 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
