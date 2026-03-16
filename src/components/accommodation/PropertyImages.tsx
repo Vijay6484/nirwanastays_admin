@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 // import { toast } from "react-toastify";
 import { BASE_URL } from "../../config/config";
@@ -73,6 +73,119 @@ export default function PropertyImages({
     const [toast, setToast] = useState<Toast | null>(null);
     const [openUploadImageModal, setOpenUploadImageModal] = useState(false);
 
+    const dragIdRef = useRef<number | null>(null);
+    const overIdRef = useRef<number | null>(null);
+    const imagesRef = useRef<PropertyImage[]>(images);
+
+    // Sync refs with state
+    useEffect(() => {
+        dragIdRef.current = dragId;
+    }, [dragId]);
+
+    useEffect(() => {
+        overIdRef.current = overId;
+    }, [overId]);
+
+    useEffect(() => {
+        imagesRef.current = images;
+    }, [images]);
+
+    // ─── Touch drag handlers ──────────────────────────────────────────────
+
+    const onTouchStart = (e: React.TouchEvent<HTMLDivElement>, id: number) => {
+        e.preventDefault(); // Prevent page scroll
+        setDragId(id);
+        setOverId(null);
+    };
+
+    // This effect sets up global touchmove/touchend listeners when a drag is active
+    useEffect(() => {
+        if (dragId === null) return; // No active drag
+
+        const onTouchMove = (e: TouchEvent) => {
+            e.preventDefault(); // Stop scrolling while dragging
+            const touch = e.touches[0];
+            if (!touch) return;
+
+            // Find the draggable element under the finger
+            const element = document.elementFromPoint(
+                touch.clientX,
+                touch.clientY,
+            );
+            const draggableItem = element?.closest('[data-draggable="true"]');
+            if (draggableItem) {
+                const idAttr = draggableItem.getAttribute("data-image-id");
+                if (idAttr) {
+                    const id = Number(idAttr);
+                    setOverId(id !== dragIdRef.current ? id : null);
+                } else {
+                    setOverId(null);
+                }
+            } else {
+                setOverId(null);
+            }
+        };
+
+        const onTouchEnd = (e: TouchEvent) => {
+            e.preventDefault();
+            const fromId = dragIdRef.current;
+            const toId = overIdRef.current;
+
+            if (fromId !== null && toId !== null && fromId !== toId) {
+                // Perform reorder using the current images array
+                const reordered = [...imagesRef.current];
+                const fromIdx = reordered.findIndex(
+                    (i) => i.imageId === fromId,
+                );
+                const toIdx = reordered.findIndex((i) => i.imageId === toId);
+                if (fromIdx !== -1 && toIdx !== -1) {
+                    const [moved] = reordered.splice(fromIdx, 1);
+                    reordered.splice(toIdx, 0, moved);
+                    const updated = reordered.map((img, idx) => ({
+                        ...img,
+                        imgPosition: idx + 1,
+                    }));
+                    setImages(updated);
+
+                    // Send updated positions to the API
+                    (async () => {
+                        try {
+                            setLoading(true);
+                            const payload: PositionUpdate[] = updated.map(
+                                ({ imageId, imgPosition }) => ({
+                                    imageId,
+                                    imgPosition,
+                                }),
+                            );
+                            await updateImagePositions(payload);
+                            showToast("✓ Image order saved");
+                        } catch {
+                            showToast("⚠ Failed to save order", "error");
+                        } finally {
+                            setLoading(false);
+                        }
+                    })();
+                }
+            }
+
+            // End drag session
+            setDragId(null);
+            setOverId(null);
+        };
+
+        // Attach global listeners
+        window.addEventListener("touchmove", onTouchMove, { passive: false });
+        window.addEventListener("touchend", onTouchEnd);
+        window.addEventListener("touchcancel", onTouchEnd);
+
+        // Cleanup when drag ends (dragId becomes null) or component unmounts
+        return () => {
+            window.removeEventListener("touchmove", onTouchMove);
+            window.removeEventListener("touchend", onTouchEnd);
+            window.removeEventListener("touchcancel", onTouchEnd);
+        };
+    }, [dragId]); // Only re‑run when dragId changes
+
     // ── Fetch on mount ──
 
     const loadImages = async () => {
@@ -87,18 +200,6 @@ export default function PropertyImages({
         }
     };
     useEffect(() => {
-        // const load = async () => {
-        //     try {
-        //         setLoading(true);
-        //         const data = await fetchImages(accommodationId);
-        //         setImages(data.sort((a, b) => a.imgPosition - b.imgPosition));
-        //     } catch {
-        //         showToast("Failed to load images", "error");
-        //     } finally {
-        //         setLoading(false);
-        //     }
-        // };
-        // load();
         loadImages();
     }, [accommodationId]);
 
@@ -336,7 +437,7 @@ export default function PropertyImages({
                         return (
                             <div
                                 key={img.imageId}
-                                draggable
+                                draggable // keep for mouse users
                                 onDragStart={(e) =>
                                     handleDragStart(e, img.imageId)
                                 }
@@ -345,6 +446,11 @@ export default function PropertyImages({
                                 }
                                 onDrop={(e) => handleDrop(e, img.imageId)}
                                 onDragEnd={handleDragEnd}
+                                onTouchStart={(e) =>
+                                    onTouchStart(e, img.imageId)
+                                } // new
+                                data-draggable="true" // new
+                                data-image-id={img.imageId} // new
                                 className={[
                                     "relative rounded-xl overflow-hidden bg-white shadow-sm cursor-grab active:cursor-grabbing transition-all duration-150 group",
                                     isDragging
@@ -354,6 +460,7 @@ export default function PropertyImages({
                                         ? "ring-2 ring-indigo-500 ring-offset-2 bg-indigo-50"
                                         : "",
                                 ].join(" ")}
+                                style={{ touchAction: "none" }} // optional, reinforces prevention of scroll
                             >
                                 {/* Image */}
                                 <div className="relative h-36 overflow-hidden">
