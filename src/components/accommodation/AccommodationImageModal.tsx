@@ -217,7 +217,7 @@ const AccommodationImageModal: React.FC<AccommodationImageModalProps> = ({
             const response = await axios.get(
                 `${BASE_URL}/admin/properties/accommodations/${accommodationId}/fetch-position`,
             );
-            console.log(response);
+            // console.log(response);
             setPosition(response.data.imgPositionId + 1);
         };
         getImgPosition(accommodationId);
@@ -251,22 +251,12 @@ const AccommodationImageModal: React.FC<AccommodationImageModalProps> = ({
             file,
         };
 
-        // Replace with your real API call:
-        // const formData = new FormData();
-        // formData.append("image", file);
-        // formData.append("imgTitle", payload.imgTitle);
-        // formData.append("imgAltText", payload.imgAltText);
-        // formData.append("imgDescription", payload.imgDescription ?? "");
-        // formData.append("imgPosition", String(payload.imgPosition));
-        // formData.append("accommodationId", String(accommodationId));
-        // await fetch(`/api/accommodations/${accommodationId}/images`, { method: "POST", body: formData });
-
         await new Promise((r) => setTimeout(r, 1500));
         setUploading(false);
         setSuccess(true);
         setTimeout(() => {
             onSuccess?.(payload);
-            onClose();
+            // onClose();
         }, 1000);
     };
 

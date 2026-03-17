@@ -85,6 +85,8 @@ const AccommodationForm: React.FC = () => {
     const navigate = useNavigate();
     const isEditing = id !== undefined;
 
+    console.log("AccommodationId: ", id);
+
     const [formData, setFormData] = useState<Accommodation>({
         name: "",
         description: "",

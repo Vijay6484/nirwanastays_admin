@@ -378,6 +378,7 @@ export default function PropertyImages({
         if (response.data.success) {
             showToast("Image uploaded successfully!!!");
             loadImages();
+            setOpenUploadImageModal(false);
         } else {
             showToast(
                 response.data.message || "Failed to upload image.",
@@ -421,6 +422,7 @@ export default function PropertyImages({
                 </p>
                 <div className="flex items-center gap-3">
                     <button
+                        type="button"
                         onClick={() => setOpenUploadImageModal(true)}
                         className="inline-flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
                     >
@@ -448,7 +450,7 @@ export default function PropertyImages({
                     onClose={() => setOpenUploadImageModal(false)}
                     onSuccess={(payload) => {
                         handleUploadImage(payload);
-                        setOpenUploadImageModal(false);
+                        // setOpenUploadImageModal(false);
                     }}
                 />
             )}
