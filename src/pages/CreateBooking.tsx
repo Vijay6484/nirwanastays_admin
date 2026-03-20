@@ -1,556 +1,652 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Building2, User, CreditCard, UtensilsCrossed } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
-import { BASE_URL } from '../config/config';
-
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+    ArrowLeft,
+    Calendar,
+    Building2,
+    User,
+    CreditCard,
+    UtensilsCrossed,
+} from "lucide-react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { BASE_URL } from "../config/config";
 
 interface Accommodation {
-  id: number;
-  name: string;
-  description: string;
-  price: number;
-  available_rooms: number;
-  amenities: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  adultPrice?: number;
-  childPrice?: number;
-  capacity: number;
+    id: number;
+    name: string;
+    description: string;
+    price: number;
+    available_rooms: number;
+    amenities: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    adultPrice?: number;
+    childPrice?: number;
+    capacity: number;
 }
 
 interface Coupon {
-  id: number;
-  code: string;
-  discount: string;
-  discountType: 'percentage' | 'fixed';
-  minAmount?: string | null;
-  maxDiscount?: string | null;
-  active: boolean;
-  accommodationType: string | null;
+    id: number;
+    code: string;
+    discount: string;
+    discountType: "percentage" | "fixed";
+    minAmount?: string | null;
+    maxDiscount?: string | null;
+    active: boolean;
+    accommodationType: number | null;
 }
 
 interface BlockedDate {
-  id: number;
-  accommodation_id: number;
-  blocked_date: string;
-  rooms_blocked: number | null;
-  rooms?: number | null;
-  adult_price?: number | null;
-  child_price?: number | null;
+    id: number;
+    accommodation_id: number;
+    blocked_date: string;
+    rooms_blocked: number | null;
+    rooms?: number | null;
+    adult_price?: number | null;
+    child_price?: number | null;
 }
 
 const CreateBooking: React.FC = () => {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [accommodations, setAccommodations] = useState<Accommodation[]>([]);
-  const [selectedAccommodation, setSelectedAccommodation] = useState<Accommodation | null>(null);
-  const [availableCoupons, setAvailableCoupons] = useState<Coupon[]>([]);
-  const [allApplicableCoupons, setAllApplicableCoupons] = useState<Coupon[]>([]);
-  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-  const [availableRooms, setAvailableRooms] = useState<number>(0);
-  const [bookedRooms, setBookedRooms] = useState<number>(0);
-  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
-  const [dateError, setDateError] = useState<string | null>(null);
-  const [showRoomAvailability, setShowRoomAvailability] = useState(false);
-  const [blockedRoomsCount, setBlockedRoomsCount] = useState<number>(0);
-  const [couponError, setCouponError] = useState<string>('');
-  const [formData, setFormData] = useState({
-    guest_name: '',
-    guest_email: '',
-    guest_phone: '',
-    accommodation_id: '',
-    check_in: '',
-    check_out: '',
-    adults: '1',
-    children: '0',
-    rooms: '1',
-    food_veg: '0',
-    food_nonveg: '0',
-    food_jain: '0',
-    total_amount: '',
-    discounted_amount: '',
-    advance_amount: '0',
-    payment_method: 'cash',
-    coupon_code: '',
-    notes: ''
-  });
-
-  const paymentMethods = [
-    { id: 'cash', name: 'Cash' },
-    { id: 'bank', name: 'Bank Transfer' },
-    { id: 'card', name: 'Credit/Debit Card' },
-    { id: 'gpay', name: 'Google Pay' },
-    { id: 'phonepe', name: 'PhonePe' },
-    { id: 'paytm', name: 'Paytm' }
-  ];
-
-  useEffect(() => {
-    const fetchAccommodations = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${BASE_URL}/admin/properties/accommodations`);
-        const data = await response.json();
-
-        const accommodationsData = data.data || [];
-        if (Array.isArray(accommodationsData)) {
-          setAccommodations(accommodationsData);
-        } else {
-          console.error('Unexpected accommodations data format:', data);
-          setAccommodations([]);
-        }
-      } catch (error) {
-        console.error('Error fetching accommodations:', error);
-        alert('Failed to load accommodations');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAccommodations();
-  }, []);
-
-  useEffect(() => {
-    const fetchBlockedDates = async () => {
-      try {
-        const response = await fetch(`${BASE_URL}/admin/calendar/blocked-dates`);
-        const data = await response.json();
-        if (data.success && Array.isArray(data.data)) {
-          setBlockedDates(data.data);
-        }
-      } catch (error) {
-        console.error('Error fetching blocked dates:', error);
-      }
-    };
-
-    fetchBlockedDates();
-  }, []);
-
-  useEffect(() => {
-    const fetchApplicableCoupons = async () => {
-      if (!selectedAccommodation) {
-        setAllApplicableCoupons([]);
-        return;
-      }
-
-      try {
-        const response = await fetch(`${BASE_URL}/admin/coupons`);
-        const data = await response.json();
-
-        if (data.success && Array.isArray(data.data)) {
-          const filteredCoupons = data.data.filter((coupon: Coupon) => {
-            if (!coupon.active) return false;
-            const couponAccommodationType = coupon.accommodationType?.toLowerCase().trim();
-            if (couponAccommodationType === "all" || !couponAccommodationType) return true;
-            // Check if coupon type is contained in accommodation name or vice versa (handles truncated names)
-            const accommodationName = selectedAccommodation.name?.toLowerCase().trim();
-            const isMatch = accommodationName.includes(couponAccommodationType) || 
-                           couponAccommodationType.includes(accommodationName);
-            return isMatch;
-          });
-
-          setAllApplicableCoupons(filteredCoupons);
-        } else {
-          setAllApplicableCoupons([]);
-        }
-      } catch (error) {
-        console.error('Error fetching coupons:', error);
-        setAllApplicableCoupons([]);
-      }
-    };
-
-    fetchApplicableCoupons();
-  }, [selectedAccommodation]);
-
-  useEffect(() => {
-    if (formData.coupon_code) {
-      const searchTerm = formData.coupon_code.toLowerCase();
-      const filtered = allApplicableCoupons.filter(coupon =>
-        coupon.code.toLowerCase().includes(searchTerm)
-      );
-      setAvailableCoupons(filtered);
-    } else {
-      setAvailableCoupons(allApplicableCoupons);
-    }
-  }, [formData.coupon_code, allApplicableCoupons]);
-
-  const fetchAccommodationDetails = async (id: string) => {
-    try {
-      const response = await fetch(`${BASE_URL}/admin/properties/accommodations/${id}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch accommodation details');
-      }
-      const data = await response.json();
-      const accommodation: Accommodation = {
-        id: data.id,
-        name: data.basicInfo?.name || 'Unnamed Accommodation',
-        description: data.basicInfo?.description || '',
-        price: data.basicInfo?.price || 0,
-        available_rooms: data.basicInfo?.rooms || 0,
-        amenities: data.amenities || '',
-        address: data.location?.address || '',
-        latitude: data.location?.coordinates?.latitude || 0,
-        longitude: data.location?.coordinates?.longitude || 0,
-        adultPrice: data.packages?.pricing?.adult || 0,
-        childPrice: data.packages?.pricing?.child || 0,
-        capacity: data.basicInfo?.capacity || 4
-      };
-      setSelectedAccommodation(accommodation);
-      setAvailableRooms(0);
-      setShowRoomAvailability(false);
-      setAppliedCoupon(null);
-      setFormData(prev => ({ ...prev, coupon_code: '' }));
-    } catch (error) {
-      console.error('Error fetching accommodation details:', error);
-    }
-  }
-
-  const fetchBookedRooms = async (accommodationId: number, checkInDate: string) => {
-    try {
-      const response = await fetch(`${BASE_URL}/admin/bookings/room-occupancy?check_in=${checkInDate}&id=${accommodationId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch booked rooms');
-      }
-      const data = await response.json();
-      return data.total_rooms || 0;
-    } catch (error) {
-      console.error('Error fetching booked rooms:', error);
-      return 0;
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    if (name === 'coupon_code') {
-      setAppliedCoupon(null);
-      if (couponError) {
-        setCouponError('');
-      }
-    }
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleCouponSelect = (coupon: Coupon) => {
-    setAppliedCoupon(coupon);
-    setFormData(prev => ({
-      ...prev,
-      coupon_code: coupon.code
-    }));
-    setAvailableCoupons([]);
-    setCouponError('');
-  };
-
-  const applyCoupon = async () => {
-    if (!formData.coupon_code.trim()) {
-      setCouponError('Please enter a coupon code');
-      return;
-    }
-
-    if (!selectedAccommodation) {
-      setCouponError('Please select an accommodation first');
-      return;
-    }
-
-    try {
-      // Validate coupon via API (backend stores codes in uppercase)
-      const couponCodeToSearch = formData.coupon_code.trim().toUpperCase();
-      const response = await fetch(
-        `${BASE_URL}/admin/coupons?search=${encodeURIComponent(couponCodeToSearch)}`
-      );
-      const result = await response.json();
-
-      if (!response.ok || !result.success || !result.data || result.data.length === 0) {
-        setCouponError('Invalid coupon code');
-        return;
-      }
-
-      // Find exact code match (API searches by code OR name, so we need to verify code match)
-      const couponToApply = result.data.find(
-        (coupon: Coupon) => coupon.code.toUpperCase() === couponCodeToSearch
-      );
-
-      if (!couponToApply) {
-        setCouponError('Invalid coupon code');
-        return;
-      }
-
-      // Check if coupon is active
-      if (!couponToApply.active) {
-        setCouponError('This coupon is not active');
-        return;
-      }
-
-      // Check accommodation type match (case-insensitive comparison with contains check)
-      const couponAccommodationType = couponToApply.accommodationType?.toLowerCase().trim() || '';
-      const accommodationName = selectedAccommodation.name?.toLowerCase().trim() || '';
-      
-      if (
-        couponAccommodationType &&
-        couponAccommodationType !== 'all' &&
-        !accommodationName.includes(couponAccommodationType) &&
-        !couponAccommodationType.includes(accommodationName)
-      ) {
-        setCouponError('This coupon is not valid for this accommodation');
-        return;
-      }
-
-      // Check minimum amount
-      const baseAmount = parseFloat(formData.total_amount) || 0;
-      const minAmount = couponToApply.minAmount ? parseFloat(couponToApply.minAmount) : 0;
-      if (minAmount > 0 && baseAmount < minAmount) {
-        setCouponError(`Minimum amount of ₹${minAmount} required for this coupon`);
-        return;
-      }
-
-      // All validations passed
-      setAppliedCoupon(couponToApply);
-      setCouponError('');
-      setAvailableCoupons([]);
-    } catch (error) {
-      console.error('Error validating coupon:', error);
-      setCouponError('Failed to validate coupon. Please try again.');
-    }
-  };
-
-  const removeCoupon = () => {
-    setAppliedCoupon(null);
-    setFormData(prev => ({ ...prev, coupon_code: '' }));
-    setCouponError('');
-  };
-
-  useEffect(() => {
-    if (formData.check_in) {
-      const nextDay = new Date(formData.check_in);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const nextDayString = nextDay.toISOString().split('T')[0];
-
-      if (!formData.check_out || new Date(formData.check_out) <= new Date(formData.check_in)) {
-        setFormData(prev => ({ ...prev, check_out: nextDayString }));
-      }
-
-      validateDates(formData.check_in, nextDayString);
-    }
-  }, [formData.check_in, formData.accommodation_id, selectedAccommodation, blockedDates]);
-
-  useEffect(() => {
-    const calculateAvailableRooms = async () => {
-      if (!formData.accommodation_id || !formData.check_in || !selectedAccommodation) {
-        setAvailableRooms(0);
-        setShowRoomAvailability(false);
-        return;
-      }
-
-      const accommodationId = parseInt(formData.accommodation_id);
-      const totalRooms = selectedAccommodation.available_rooms || 0;
-      const booked = await fetchBookedRooms(accommodationId, formData.check_in);
-
-      setBookedRooms(booked);
-
-      const blockedForDate = blockedDates.find(
-        b => b.accommodation_id === accommodationId && b.blocked_date === formData.check_in
-      );
-      // Handle blocked rooms - check both rooms_blocked and rooms fields
-      // If rooms_blocked or rooms is null, it means all rooms are blocked
-      // Negative values in 'rooms' field mean rooms are blocked (e.g., -3 means 3 rooms blocked)
-      // Positive values mean rooms are released/added back (so they're not blocked)
-      let blockedRooms = 0;
-      if (blockedForDate) {
-        // Check if all rooms are blocked (null means all rooms blocked)
-        if (blockedForDate.rooms_blocked === null || blockedForDate.rooms === null) {
-          // All rooms are blocked
-          blockedRooms = totalRooms;
-        } else {
-          // Use rooms_blocked if available, otherwise use rooms
-          // The 'rooms' field can be negative (blocked) or positive (released)
-          const roomsValue = blockedForDate.rooms_blocked !== undefined && blockedForDate.rooms_blocked !== null
-            ? blockedForDate.rooms_blocked
-            : (blockedForDate.rooms !== undefined && blockedForDate.rooms !== null ? blockedForDate.rooms : 0);
-          
-          const roomsNum = Number(roomsValue) || 0;
-          // If negative, it means rooms are blocked (convert to positive for blocked count)
-          // If positive or zero, it means rooms are released or no blocking (so no additional blocking)
-          blockedRooms = roomsNum < 0 ? Math.abs(roomsNum) : 0;
-        }
-      }
-      setBlockedRoomsCount(blockedRooms);
-
-      const bookedCount = booked || 0;
-      const blockedCount = blockedRooms || 0;
-
-      const available = totalRooms - bookedCount - blockedCount;
-      const availableRoomsValue = Math.max(available, 0);
-      setAvailableRooms(availableRoomsValue);
-      setShowRoomAvailability(true);
-
-      if (parseInt(formData.rooms) > availableRoomsValue) {
-        setFormData(prev => ({
-          ...prev,
-          rooms: availableRoomsValue > 0 ? availableRoomsValue.toString() : '0'
-        }));
-      }
-    };
-
-    calculateAvailableRooms();
-  }, [formData.accommodation_id, formData.check_in, blockedDates, selectedAccommodation]);
-
-  const validateDates = (checkIn: string, checkOut: string) => {
-    if (!checkIn || !checkOut) return;
-
-    const startDate = new Date(checkIn);
-    const endDate = new Date(checkOut);
-    const accommodationId = parseInt(formData.accommodation_id);
-
-    if (!accommodationId || !selectedAccommodation) return;
-
-    const accommodationBlockedDates = blockedDates.filter(
-      date => date.accommodation_id === accommodationId
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
+    const [accommodations, setAccommodations] = useState<Accommodation[]>([]);
+    const [selectedAccommodation, setSelectedAccommodation] =
+        useState<Accommodation | null>(null);
+    const [availableCoupons, setAvailableCoupons] = useState<Coupon[]>([]);
+    const [allApplicableCoupons, setAllApplicableCoupons] = useState<Coupon[]>(
+        [],
     );
+    const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+    const [availableRooms, setAvailableRooms] = useState<number>(0);
+    const [bookedRooms, setBookedRooms] = useState<number>(0);
+    const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
+    const [dateError, setDateError] = useState<string | null>(null);
+    const [showRoomAvailability, setShowRoomAvailability] = useState(false);
+    const [blockedRoomsCount, setBlockedRoomsCount] = useState<number>(0);
+    const [couponError, setCouponError] = useState<string>("");
+    const [formData, setFormData] = useState({
+        guest_name: "",
+        guest_email: "",
+        guest_phone: "",
+        accommodation_id: "",
+        check_in: "",
+        check_out: "",
+        adults: "1",
+        children: "0",
+        rooms: "1",
+        food_veg: "0",
+        food_nonveg: "0",
+        food_jain: "0",
+        total_amount: "",
+        discounted_amount: "",
+        advance_amount: "0",
+        payment_method: "cash",
+        coupon_code: "",
+        notes: "",
+    });
 
-    const totalRooms = selectedAccommodation.available_rooms || 0;
+    const paymentMethods = [
+        { id: "cash", name: "Cash" },
+        { id: "bank", name: "Bank Transfer" },
+        { id: "card", name: "Credit/Debit Card" },
+        { id: "gpay", name: "Google Pay" },
+        { id: "phonepe", name: "PhonePe" },
+        { id: "paytm", name: "Paytm" },
+    ];
 
-    let errorDate: string | null = null;
-    for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
-      const dateString = d.toISOString().split('T')[0];
+    useEffect(() => {
+        const fetchAccommodations = async () => {
+            try {
+                setLoading(true);
+                const response = await fetch(
+                    `${BASE_URL}/admin/properties/accommodations`,
+                );
+                const data = await response.json();
 
-      const blockedForDate = accommodationBlockedDates.find(
-        blocked => blocked.blocked_date === dateString
-      );
+                const accommodationsData = data.data || [];
+                if (Array.isArray(accommodationsData)) {
+                    setAccommodations(accommodationsData);
+                } else {
+                    console.error(
+                        "Unexpected accommodations data format:",
+                        data,
+                    );
+                    setAccommodations([]);
+                }
+            } catch (error) {
+                console.error("Error fetching accommodations:", error);
+                alert("Failed to load accommodations");
+            } finally {
+                setLoading(false);
+            }
+        };
 
-      if (blockedForDate) {
-        // Check if date is fully blocked
-        // A date is fully blocked if:
-        // 1. rooms_blocked is null (all rooms blocked)
-        // 2. rooms is null (all rooms blocked - from Calendar interface)
-        // 3. rooms_blocked equals total rooms
-        const isFullyBlocked = 
-          blockedForDate.rooms_blocked === null ||
-          blockedForDate.rooms === null ||
-          (blockedForDate.rooms_blocked !== null && blockedForDate.rooms_blocked >= totalRooms);
+        fetchAccommodations();
+    }, []);
 
-        if (isFullyBlocked) {
-          errorDate = dateString;
-          break;
+    useEffect(() => {
+        const fetchBlockedDates = async () => {
+            try {
+                const response = await fetch(
+                    `${BASE_URL}/admin/calendar/blocked-dates`,
+                );
+                const data = await response.json();
+                if (data.success && Array.isArray(data.data)) {
+                    setBlockedDates(data.data);
+                }
+            } catch (error) {
+                console.error("Error fetching blocked dates:", error);
+            }
+        };
+
+        fetchBlockedDates();
+    }, []);
+
+    useEffect(() => {
+        const fetchApplicableCoupons = async () => {
+            if (!selectedAccommodation) {
+                setAllApplicableCoupons([]);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/admin/coupons`);
+                const data = await response.json();
+
+                if (data.success && Array.isArray(data.data)) {
+                    const filteredCoupons = data.data.filter(
+                        (coupon: Coupon) => {
+                            if (!coupon.active) return false;
+
+                            if (coupon.accommodationType === 0) return true;
+                            // Check if coupon type is contained in accommodation name or vice versa (handles truncated names)
+                            const isMatch =
+                                coupon.accommodationType ===
+                                Number(selectedAccommodation.id);
+                            return isMatch;
+                        },
+                    );
+
+                    setAllApplicableCoupons(filteredCoupons);
+                } else {
+                    setAllApplicableCoupons([]);
+                }
+            } catch (error) {
+                console.error("Error fetching coupons:", error);
+                setAllApplicableCoupons([]);
+            }
+        };
+
+        fetchApplicableCoupons();
+    }, [selectedAccommodation]);
+
+    useEffect(() => {
+        if (formData.coupon_code) {
+            const searchTerm = formData.coupon_code.toLowerCase();
+            const filtered = allApplicableCoupons.filter((coupon) =>
+                coupon.code.toLowerCase().includes(searchTerm),
+            );
+            setAvailableCoupons(filtered);
+        } else {
+            setAvailableCoupons(allApplicableCoupons);
         }
-      }
-    }
+    }, [formData.coupon_code, allApplicableCoupons]);
 
-    setDateError(errorDate ? `The date ${errorDate} is fully blocked for this accommodation` : null);
-  };
-
-  const calculateDiscount = (totalAmount: number, coupon: Coupon | null): number => {
-    if (!coupon) return totalAmount;
-
-    const discount = parseFloat(coupon.discount);
-    const minAmount = coupon.minAmount ? parseFloat(coupon.minAmount) : 0;
-    const maxDiscount = coupon.maxDiscount ? parseFloat(coupon.maxDiscount) : Infinity;
-
-    if (totalAmount < minAmount) {
-      return totalAmount;
-    }
-
-    let discountedAmount = totalAmount;
-
-    if (coupon.discountType === 'percentage') {
-      const discountValue = totalAmount * (discount / 100);
-      const finalDiscount = Math.min(discountValue, maxDiscount);
-      discountedAmount = totalAmount - finalDiscount;
-    } else {
-      discountedAmount = totalAmount - discount;
-    }
-
-    return Math.max(0, discountedAmount);
-  };
-
-  useEffect(() => {
-    if (!selectedAccommodation) {
-      setFormData(prev => ({
-        ...prev,
-        total_amount: '',
-        discounted_amount: ''
-      }));
-      return;
-    }
-
-    const adults = parseInt(formData.adults) || 0;
-    const children = parseInt(formData.children) || 0;
-    
-    // Check for special pricing from blocked dates for the check-in date
-    let adultPricePerPerson = selectedAccommodation.adultPrice || 0;
-    let childPricePerPerson = selectedAccommodation.childPrice || 0;
-    
-    if (formData.check_in && formData.accommodation_id) {
-      const accommodationId = parseInt(formData.accommodation_id);
-      const blockedForDate = blockedDates.find(
-        b => b.accommodation_id === accommodationId && b.blocked_date === formData.check_in
-      );
-      
-      // Use special pricing if available, otherwise use base pricing
-      if (blockedForDate) {
-        if (blockedForDate.adult_price !== null && blockedForDate.adult_price !== undefined) {
-          adultPricePerPerson = blockedForDate.adult_price;
+    const fetchAccommodationDetails = async (id: string) => {
+        try {
+            const response = await fetch(
+                `${BASE_URL}/admin/properties/accommodations/${id}`,
+            );
+            if (!response.ok) {
+                throw new Error("Failed to fetch accommodation details");
+            }
+            const data = await response.json();
+            const accommodation: Accommodation = {
+                id: data.id,
+                name: data.basicInfo?.name || "Unnamed Accommodation",
+                description: data.basicInfo?.description || "",
+                price: data.basicInfo?.price || 0,
+                available_rooms: data.basicInfo?.rooms || 0,
+                amenities: data.amenities || "",
+                address: data.location?.address || "",
+                latitude: data.location?.coordinates?.latitude || 0,
+                longitude: data.location?.coordinates?.longitude || 0,
+                adultPrice: data.packages?.pricing?.adult || 0,
+                childPrice: data.packages?.pricing?.child || 0,
+                capacity: data.basicInfo?.capacity || 4,
+            };
+            setSelectedAccommodation(accommodation);
+            setAvailableRooms(0);
+            setShowRoomAvailability(false);
+            setAppliedCoupon(null);
+            setFormData((prev) => ({ ...prev, coupon_code: "" }));
+        } catch (error) {
+            console.error("Error fetching accommodation details:", error);
         }
-        if (blockedForDate.child_price !== null && blockedForDate.child_price !== undefined) {
-          childPricePerPerson = blockedForDate.child_price;
+    };
+
+    const fetchBookedRooms = async (
+        accommodationId: number,
+        checkInDate: string,
+    ) => {
+        try {
+            const response = await fetch(
+                `${BASE_URL}/admin/bookings/room-occupancy?check_in=${checkInDate}&id=${accommodationId}`,
+            );
+            if (!response.ok) {
+                throw new Error("Failed to fetch booked rooms");
+            }
+            const data = await response.json();
+            return data.total_rooms || 0;
+        } catch (error) {
+            console.error("Error fetching booked rooms:", error);
+            return 0;
         }
-      }
-    }
-    
-    const adultPrice = adultPricePerPerson * adults;
-    const childPrice = childPricePerPerson * children;
-    const baseTotal = adultPrice + childPrice;
+    };
 
-    const discountedTotal = calculateDiscount(baseTotal, appliedCoupon);
+    const handleChange = (
+        e: React.ChangeEvent<
+            HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+        >,
+    ) => {
+        const { name, value } = e.target;
+        if (name === "coupon_code") {
+            setAppliedCoupon(null);
+            if (couponError) {
+                setCouponError("");
+            }
+        }
+        setFormData((prev) => ({ ...prev, [name]: value }));
+    };
 
-    setFormData(prev => ({
-      ...prev,
-      total_amount: baseTotal.toFixed(2),
-      discounted_amount: discountedTotal.toFixed(2)
-    }));
-  }, [
-    selectedAccommodation,
-    formData.adults,
-    formData.children,
-    formData.rooms,
-    formData.check_in,
-    formData.accommodation_id,
-    blockedDates,
-    appliedCoupon
-  ]);
-  const downloadPdf = (
-    email: string,
-    name: string,
-    BookingId: string,
-    CheckinDate: string,
-    CheckoutDate: string,
-    totalPrice: number,
-    advancePayable: number,
-    remainingAmount: number,
-    mobile: string,
-    totalPerson: number,
-    adult: number,
-    child: number,
-    rooms: number,
-    vegCount: number,
-    nonvegCount: number,
-    joinCount: number,
-    accommodationName: string,
-    accommodationAddress: string,
-    latitude: string,
-	  coupon : string,
-	  discount : number,
-	  full_amount : number,
-    longitude: string,
-    owner_email: string) => {
-    const today: Date = new Date();
+    const handleCouponSelect = (coupon: Coupon) => {
+        setAppliedCoupon(coupon);
+        setFormData((prev) => ({
+            ...prev,
+            coupon_code: coupon.code,
+        }));
+        setAvailableCoupons([]);
+        setCouponError("");
+    };
 
-    const day: string = String(today.getDate()).padStart(2, '0');
-    const month: string = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-    const year: number = today.getFullYear();
+    const applyCoupon = async () => {
+        if (!formData.coupon_code.trim()) {
+            setCouponError("Please enter a coupon code");
+            return;
+        }
 
-    const BookingDate: string = `${year}-${month}-${day}`;
-    const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+        if (!selectedAccommodation) {
+            setCouponError("Please select an accommodation first");
+            return;
+        }
+
+        try {
+            // Validate coupon via API (backend stores codes in uppercase)
+            const couponCodeToSearch = formData.coupon_code
+                .trim()
+                .toUpperCase();
+            const response = await fetch(
+                `${BASE_URL}/admin/coupons?search=${encodeURIComponent(couponCodeToSearch)}`,
+            );
+            const result = await response.json();
+
+            if (
+                !response.ok ||
+                !result.success ||
+                !result.data ||
+                result.data.length === 0
+            ) {
+                setCouponError("Invalid coupon code");
+                return;
+            }
+
+            // console.log("I am Here");
+            // Find exact code match (API searches by code OR name, so we need to verify code match)
+            const couponToApply = result.data.find(
+                (coupon: Coupon) =>
+                    coupon.code.toUpperCase() === couponCodeToSearch,
+            );
+
+            if (!couponToApply) {
+                setCouponError("Invalid coupon code");
+                return;
+            }
+
+            // Check if coupon is active
+            if (!couponToApply.active) {
+                setCouponError("This coupon is not active");
+                return;
+            }
+
+            // Check accommodation type match (case-insensitive comparison with contains check)
+            if (
+                couponToApply.accommodationType &&
+                couponToApply.accommodationType !==
+                    Number(selectedAccommodation.id)
+            ) {
+                setCouponError(
+                    "This coupon is not valid for this accommodation",
+                );
+                return;
+            }
+
+            // Check minimum amount
+            const baseAmount = parseFloat(formData.total_amount) || 0;
+            const minAmount = couponToApply.minAmount
+                ? parseFloat(couponToApply.minAmount)
+                : 0;
+            if (minAmount > 0 && baseAmount < minAmount) {
+                setCouponError(
+                    `Minimum amount of ₹${minAmount} required for this coupon`,
+                );
+                return;
+            }
+
+            // All validations passed
+            setAppliedCoupon(couponToApply);
+            setCouponError("");
+            setAvailableCoupons([]);
+        } catch (error) {
+            console.error("Error validating coupon:", error);
+            setCouponError("Failed to validate coupon. Please try again.");
+        }
+    };
+
+    const removeCoupon = () => {
+        setAppliedCoupon(null);
+        setFormData((prev) => ({ ...prev, coupon_code: "" }));
+        setCouponError("");
+    };
+
+    useEffect(() => {
+        if (formData.check_in) {
+            const nextDay = new Date(formData.check_in);
+            nextDay.setDate(nextDay.getDate() + 1);
+            const nextDayString = nextDay.toISOString().split("T")[0];
+
+            if (
+                !formData.check_out ||
+                new Date(formData.check_out) <= new Date(formData.check_in)
+            ) {
+                setFormData((prev) => ({ ...prev, check_out: nextDayString }));
+            }
+
+            validateDates(formData.check_in, nextDayString);
+        }
+    }, [
+        formData.check_in,
+        formData.accommodation_id,
+        selectedAccommodation,
+        blockedDates,
+    ]);
+
+    useEffect(() => {
+        const calculateAvailableRooms = async () => {
+            if (
+                !formData.accommodation_id ||
+                !formData.check_in ||
+                !selectedAccommodation
+            ) {
+                setAvailableRooms(0);
+                setShowRoomAvailability(false);
+                return;
+            }
+
+            const accommodationId = parseInt(formData.accommodation_id);
+            const totalRooms = selectedAccommodation.available_rooms || 0;
+            const booked = await fetchBookedRooms(
+                accommodationId,
+                formData.check_in,
+            );
+
+            setBookedRooms(booked);
+
+            const blockedForDate = blockedDates.find(
+                (b) =>
+                    b.accommodation_id === accommodationId &&
+                    b.blocked_date === formData.check_in,
+            );
+            // Handle blocked rooms - check both rooms_blocked and rooms fields
+            // If rooms_blocked or rooms is null, it means all rooms are blocked
+            // Negative values in 'rooms' field mean rooms are blocked (e.g., -3 means 3 rooms blocked)
+            // Positive values mean rooms are released/added back (so they're not blocked)
+            let blockedRooms = 0;
+            if (blockedForDate) {
+                // Check if all rooms are blocked (null means all rooms blocked)
+                if (
+                    blockedForDate.rooms_blocked === null ||
+                    blockedForDate.rooms === null
+                ) {
+                    // All rooms are blocked
+                    blockedRooms = totalRooms;
+                } else {
+                    // Use rooms_blocked if available, otherwise use rooms
+                    // The 'rooms' field can be negative (blocked) or positive (released)
+                    const roomsValue =
+                        blockedForDate.rooms_blocked !== undefined &&
+                        blockedForDate.rooms_blocked !== null
+                            ? blockedForDate.rooms_blocked
+                            : blockedForDate.rooms !== undefined &&
+                                blockedForDate.rooms !== null
+                              ? blockedForDate.rooms
+                              : 0;
+
+                    const roomsNum = Number(roomsValue) || 0;
+                    // If negative, it means rooms are blocked (convert to positive for blocked count)
+                    // If positive or zero, it means rooms are released or no blocking (so no additional blocking)
+                    blockedRooms = roomsNum < 0 ? Math.abs(roomsNum) : 0;
+                }
+            }
+            setBlockedRoomsCount(blockedRooms);
+
+            const bookedCount = booked || 0;
+            const blockedCount = blockedRooms || 0;
+
+            const available = totalRooms - bookedCount - blockedCount;
+            const availableRoomsValue = Math.max(available, 0);
+            setAvailableRooms(availableRoomsValue);
+            setShowRoomAvailability(true);
+
+            if (parseInt(formData.rooms) > availableRoomsValue) {
+                setFormData((prev) => ({
+                    ...prev,
+                    rooms:
+                        availableRoomsValue > 0
+                            ? availableRoomsValue.toString()
+                            : "0",
+                }));
+            }
+        };
+
+        calculateAvailableRooms();
+    }, [
+        formData.accommodation_id,
+        formData.check_in,
+        blockedDates,
+        selectedAccommodation,
+    ]);
+
+    const validateDates = (checkIn: string, checkOut: string) => {
+        if (!checkIn || !checkOut) return;
+
+        const startDate = new Date(checkIn);
+        const endDate = new Date(checkOut);
+        const accommodationId = parseInt(formData.accommodation_id);
+
+        if (!accommodationId || !selectedAccommodation) return;
+
+        const accommodationBlockedDates = blockedDates.filter(
+            (date) => date.accommodation_id === accommodationId,
+        );
+
+        const totalRooms = selectedAccommodation.available_rooms || 0;
+
+        let errorDate: string | null = null;
+        for (
+            let d = new Date(startDate);
+            d < endDate;
+            d.setDate(d.getDate() + 1)
+        ) {
+            const dateString = d.toISOString().split("T")[0];
+
+            const blockedForDate = accommodationBlockedDates.find(
+                (blocked) => blocked.blocked_date === dateString,
+            );
+
+            if (blockedForDate) {
+                // Check if date is fully blocked
+                // A date is fully blocked if:
+                // 1. rooms_blocked is null (all rooms blocked)
+                // 2. rooms is null (all rooms blocked - from Calendar interface)
+                // 3. rooms_blocked equals total rooms
+                const isFullyBlocked =
+                    blockedForDate.rooms_blocked === null ||
+                    blockedForDate.rooms === null ||
+                    (blockedForDate.rooms_blocked !== null &&
+                        blockedForDate.rooms_blocked >= totalRooms);
+
+                if (isFullyBlocked) {
+                    errorDate = dateString;
+                    break;
+                }
+            }
+        }
+
+        setDateError(
+            errorDate
+                ? `The date ${errorDate} is fully blocked for this accommodation`
+                : null,
+        );
+    };
+
+    const calculateDiscount = (
+        totalAmount: number,
+        coupon: Coupon | null,
+    ): number => {
+        if (!coupon) return totalAmount;
+
+        const discount = parseFloat(coupon.discount);
+        const minAmount = coupon.minAmount ? parseFloat(coupon.minAmount) : 0;
+        const maxDiscount = coupon.maxDiscount
+            ? parseFloat(coupon.maxDiscount)
+            : Infinity;
+
+        if (totalAmount < minAmount) {
+            return totalAmount;
+        }
+
+        let discountedAmount = totalAmount;
+
+        if (coupon.discountType === "percentage") {
+            const discountValue = totalAmount * (discount / 100);
+            const finalDiscount = Math.min(discountValue, maxDiscount);
+            discountedAmount = totalAmount - finalDiscount;
+        } else {
+            discountedAmount = totalAmount - discount;
+        }
+
+        return Math.max(0, discountedAmount);
+    };
+
+    useEffect(() => {
+        if (!selectedAccommodation) {
+            setFormData((prev) => ({
+                ...prev,
+                total_amount: "",
+                discounted_amount: "",
+            }));
+            return;
+        }
+
+        const adults = parseInt(formData.adults) || 0;
+        const children = parseInt(formData.children) || 0;
+
+        // Check for special pricing from blocked dates for the check-in date
+        let adultPricePerPerson = selectedAccommodation.adultPrice || 0;
+        let childPricePerPerson = selectedAccommodation.childPrice || 0;
+
+        if (formData.check_in && formData.accommodation_id) {
+            const accommodationId = parseInt(formData.accommodation_id);
+            const blockedForDate = blockedDates.find(
+                (b) =>
+                    b.accommodation_id === accommodationId &&
+                    b.blocked_date === formData.check_in,
+            );
+
+            // Use special pricing if available, otherwise use base pricing
+            if (blockedForDate) {
+                if (
+                    blockedForDate.adult_price !== null &&
+                    blockedForDate.adult_price !== undefined
+                ) {
+                    adultPricePerPerson = blockedForDate.adult_price;
+                }
+                if (
+                    blockedForDate.child_price !== null &&
+                    blockedForDate.child_price !== undefined
+                ) {
+                    childPricePerPerson = blockedForDate.child_price;
+                }
+            }
+        }
+
+        const adultPrice = adultPricePerPerson * adults;
+        const childPrice = childPricePerPerson * children;
+        const baseTotal = adultPrice + childPrice;
+
+        const discountedTotal = calculateDiscount(baseTotal, appliedCoupon);
+
+        setFormData((prev) => ({
+            ...prev,
+            total_amount: baseTotal.toFixed(2),
+            discounted_amount: discountedTotal.toFixed(2),
+        }));
+    }, [
+        selectedAccommodation,
+        formData.adults,
+        formData.children,
+        formData.rooms,
+        formData.check_in,
+        formData.accommodation_id,
+        blockedDates,
+        appliedCoupon,
+    ]);
+    const downloadPdf = (
+        email: string,
+        name: string,
+        BookingId: string,
+        CheckinDate: string,
+        CheckoutDate: string,
+        totalPrice: number,
+        advancePayable: number,
+        remainingAmount: number,
+        mobile: string,
+        totalPerson: number,
+        adult: number,
+        child: number,
+        rooms: number,
+        vegCount: number,
+        nonvegCount: number,
+        joinCount: number,
+        accommodationName: string,
+        accommodationAddress: string,
+        latitude: string,
+        coupon: string,
+        discount: number,
+        full_amount: number,
+        longitude: string,
+        owner_email: string,
+    ) => {
+        const today: Date = new Date();
+
+        const day: string = String(today.getDate()).padStart(2, "0");
+        const month: string = String(today.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+        const year: number = today.getFullYear();
+
+        const BookingDate: string = `${year}-${month}-${day}`;
+        const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml"
   xmlns:o="urn:schemas-microsoft-com:office:office">
 
@@ -1169,637 +1265,778 @@ const CreateBooking: React.FC = () => {
   </table>
 </body>
 
-</html>`
-    const container = document.createElement('div');
-  container.innerHTML = html;
+</html>`;
+        const container = document.createElement("div");
+        container.innerHTML = html;
 
-  container.style.position = 'absolute';
-  container.style.top = '-9999px';
-  container.style.left = '-9999px';
-  container.style.width = '794px'; // A4 width in pixels at 96 DPI
-  container.style.background = 'white';
-  container.style.padding = '0';
-  container.style.margin = '0';
+        container.style.position = "absolute";
+        container.style.top = "-9999px";
+        container.style.left = "-9999px";
+        container.style.width = "794px"; // A4 width in pixels at 96 DPI
+        container.style.background = "white";
+        container.style.padding = "0";
+        container.style.margin = "0";
 
-  document.body.appendChild(container);
+        document.body.appendChild(container);
 
-  html2canvas(container, {
-    scale: 2,
-    useCORS: true
-  }).then((canvas) => {
-    const imgData = canvas.toDataURL('image/png');
+        html2canvas(container, {
+            scale: 2,
+            useCORS: true,
+        })
+            .then((canvas) => {
+                const imgData = canvas.toDataURL("image/png");
 
-    // Use image size to create a custom-height PDF
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
+                // Use image size to create a custom-height PDF
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
 
-    const pdfWidth = 595.28; // A4 width in pt
-    const pdfHeight = (imgHeight * pdfWidth) / imgWidth; // dynamic height
+                const pdfWidth = 595.28; // A4 width in pt
+                const pdfHeight = (imgHeight * pdfWidth) / imgWidth; // dynamic height
 
-    const pdf = new jsPDF('p', 'pt', [pdfWidth, pdfHeight]);
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Booking-${BookingId}.pdf`);
+                const pdf = new jsPDF("p", "pt", [pdfWidth, pdfHeight]);
+                pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`Booking-${BookingId}.pdf`);
 
-    document.body.removeChild(container);
-  }).catch((error) => {
-    console.error("PDF generation failed:", error);
-    document.body.removeChild(container);
-  });
-  }
-  useEffect(() => {
-    if (formData.accommodation_id) {
-      fetchAccommodationDetails(formData.accommodation_id);
+                document.body.removeChild(container);
+            })
+            .catch((error) => {
+                console.error("PDF generation failed:", error);
+                document.body.removeChild(container);
+            });
+    };
+    useEffect(() => {
+        if (formData.accommodation_id) {
+            fetchAccommodationDetails(formData.accommodation_id);
+        }
+    }, [formData.accommodation_id]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (
+            !formData.guest_name ||
+            !formData.guest_email ||
+            !formData.accommodation_id ||
+            !formData.check_in ||
+            !formData.check_out ||
+            !formData.total_amount
+        ) {
+            alert("Please fill in all required fields");
+            return;
+        }
+
+        if (availableRooms === 0) {
+            alert(
+                "This accommodation is fully booked for the selected date. Please choose another date or accommodation.",
+            );
+            return;
+        }
+
+        const adults = parseInt(formData.adults);
+        const children = parseInt(formData.children);
+        const rooms = parseInt(formData.rooms);
+        const food_veg = parseInt(formData.food_veg);
+        const food_nonveg = parseInt(formData.food_nonveg);
+        const food_jain = parseInt(formData.food_jain);
+        const totalGuests = adults + children;
+        const totalFood = food_veg + food_nonveg + food_jain;
+
+        if (selectedAccommodation) {
+            const maxGuestsPerRoom = selectedAccommodation.capacity;
+            if (totalGuests > rooms * maxGuestsPerRoom) {
+                alert(
+                    `Maximum ${maxGuestsPerRoom} guests per room. You have ${totalGuests} guests for ${rooms} room(s).`,
+                );
+                return;
+            }
+        }
+
+        if (totalFood !== totalGuests) {
+            alert("Food preferences must match total guests count");
+            return;
+        }
+
+        if (new Date(formData.check_in) >= new Date(formData.check_out)) {
+            alert("Check-out must be after check-in");
+            return;
+        }
+
+        if (adults < 1 || rooms < 1) {
+            alert("Must have at least 1 adult and 1 room");
+            return;
+        }
+
+        if (rooms > availableRooms) {
+            alert(
+                `Only ${availableRooms} room(s) available for this accommodation`,
+            );
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const bookingPayload = {
+                guest_name: formData.guest_name,
+                guest_email: formData.guest_email,
+                guest_phone: formData.guest_phone || null,
+                accommodation_id: parseInt(formData.accommodation_id),
+                check_in: formData.check_in,
+                check_out: formData.check_out,
+                adults,
+                children,
+                rooms,
+                food_veg,
+                food_nonveg,
+                food_jain,
+                coupon: formData.coupon_code,
+                discount:
+                    parseFloat(formData.total_amount || "0") -
+                    parseFloat(formData.discounted_amount || "0"),
+                full_amount: parseFloat(formData.total_amount),
+                total_amount: parseFloat(
+                    formData.discounted_amount || formData.total_amount,
+                ),
+                advance_amount: parseFloat(formData.advance_amount || "0"),
+            };
+            console.log(bookingPayload);
+            const response = await fetch(`${BASE_URL}/admin/bookings/offline`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(bookingPayload),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to create booking");
+            }
+
+            const result = await response.json();
+            downloadPdf(
+                bookingPayload.guest_email,
+                bookingPayload.guest_name,
+                result.data.booking.id.toString(),
+                bookingPayload.check_in,
+                bookingPayload.check_out,
+                bookingPayload.total_amount,
+                bookingPayload.advance_amount,
+                bookingPayload.total_amount - bookingPayload.advance_amount,
+                bookingPayload.guest_phone || "",
+                bookingPayload.adults + bookingPayload.children,
+                bookingPayload.adults,
+                bookingPayload.children,
+                bookingPayload.rooms,
+                bookingPayload.food_veg,
+                bookingPayload.food_nonveg,
+                bookingPayload.food_jain,
+                accommodations.find(
+                    (acc) => acc.id === bookingPayload.accommodation_id,
+                )?.name || "",
+                accommodations.find(
+                    (acc) => acc.id === bookingPayload.accommodation_id,
+                )?.address || "",
+                (
+                    accommodations.find(
+                        (acc) => acc.id === bookingPayload.accommodation_id,
+                    )?.latitude || 0
+                ).toString(),
+                bookingPayload.coupon,
+                bookingPayload.discount,
+                bookingPayload.full_amount,
+                (
+                    accommodations.find(
+                        (acc) => acc.id === bookingPayload.accommodation_id,
+                    )?.longitude || 0
+                ).toString(),
+                result.data.owner_email.toString(),
+            );
+            alert("Booking created successfully!");
+            navigate("/bookings");
+        } catch (error) {
+            console.error("Error creating booking:", error);
+            alert(
+                `Error creating booking: ${error instanceof Error ? error.message : "Unknown error"}`,
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading && accommodations.length === 0) {
+        return (
+            <div className="flex justify-center items-center h-64">
+                <div className="text-gray-500">Loading...</div>
+            </div>
+        );
     }
-  }, [formData.accommodation_id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (
-      !formData.guest_name ||
-      !formData.guest_email ||
-      !formData.accommodation_id ||
-      !formData.check_in ||
-      !formData.check_out ||
-      !formData.total_amount
-    ) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
-    if (availableRooms === 0) {
-      alert('This accommodation is fully booked for the selected date. Please choose another date or accommodation.');
-      return;
-    }
-
-    const adults = parseInt(formData.adults);
-    const children = parseInt(formData.children);
-    const rooms = parseInt(formData.rooms);
-    const food_veg = parseInt(formData.food_veg);
-    const food_nonveg = parseInt(formData.food_nonveg);
-    const food_jain = parseInt(formData.food_jain);
-    const totalGuests = adults + children;
-    const totalFood = food_veg + food_nonveg + food_jain;
-
-    if (selectedAccommodation) {
-      const maxGuestsPerRoom = selectedAccommodation.capacity;
-      if (totalGuests > rooms * maxGuestsPerRoom) {
-        alert(`Maximum ${maxGuestsPerRoom} guests per room. You have ${totalGuests} guests for ${rooms} room(s).`);
-        return;
-      }
-    }
-
-    if (totalFood !== totalGuests) {
-      alert('Food preferences must match total guests count');
-      return;
-    }
-
-    if (new Date(formData.check_in) >= new Date(formData.check_out)) {
-      alert('Check-out must be after check-in');
-      return;
-    }
-
-    if (adults < 1 || rooms < 1) {
-      alert('Must have at least 1 adult and 1 room');
-      return;
-    }
-
-    if (rooms > availableRooms) {
-      alert(`Only ${availableRooms} room(s) available for this accommodation`);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const bookingPayload = {
-        guest_name: formData.guest_name,
-        guest_email: formData.guest_email,
-        guest_phone: formData.guest_phone || null,
-        accommodation_id: parseInt(formData.accommodation_id),
-        check_in: formData.check_in,
-        check_out: formData.check_out,
-        adults,
-        children,
-        rooms,
-        food_veg,
-        food_nonveg,
-        food_jain,
-        coupon : formData.coupon_code,
-	      discount : parseFloat(formData.total_amount || '0') - parseFloat(formData.discounted_amount || '0'),
-	      full_amount : parseFloat(formData.total_amount),
-        total_amount: parseFloat(formData.discounted_amount || formData.total_amount),
-        advance_amount: parseFloat(formData.advance_amount || '0'),
-      };
-      console.log(bookingPayload);
-      const response = await fetch(`${BASE_URL}/admin/bookings/offline`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(bookingPayload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create booking');
-      }
-
-      const result = await response.json();
-      downloadPdf(
-        bookingPayload.guest_email,
-        bookingPayload.guest_name,
-        result.data.booking.id.toString(),
-        bookingPayload.check_in,
-        bookingPayload.check_out,
-        bookingPayload.total_amount,
-        bookingPayload.advance_amount,
-        (bookingPayload.total_amount - bookingPayload.advance_amount),
-        bookingPayload.guest_phone || '',
-        (bookingPayload.adults + bookingPayload.children),
-        bookingPayload.adults,
-        bookingPayload.children,
-        bookingPayload.rooms,
-        bookingPayload.food_veg,
-        bookingPayload.food_nonveg,
-        bookingPayload.food_jain,
-        accommodations.find(acc => acc.id === bookingPayload.accommodation_id)?.name || '',
-        accommodations.find(acc => acc.id === bookingPayload.accommodation_id)?.address || '',
-        (accommodations.find(acc => acc.id === bookingPayload.accommodation_id)?.latitude || 0).toString(),
-        bookingPayload.coupon,
-        bookingPayload.discount,
-        bookingPayload.full_amount,
-        (accommodations.find(acc => acc.id === bookingPayload.accommodation_id)?.longitude || 0).toString(),
-        result.data.owner_email.toString()
-      );
-      alert('Booking created successfully!');
-      navigate('/bookings');
-
-    } catch (error) {
-      console.error('Error creating booking:', error);
-      alert(`Error creating booking: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading && accommodations.length === 0) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6 pb-16 md:pb-0 w-full max-w-full overflow-x-auto">
-      <div className="sm:flex sm:items-center sm:justify-between min-w-max">
-        <div>
-          <div className="flex items-center">
-            <button
-              onClick={() => navigate('/bookings')}
-              className="mr-2 text-gray-400 hover:text-gray-500"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">Create New Booking</h1>
-          </div>
-          <p className="mt-1 text-sm text-gray-500">Add a new booking manually</p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-8 min-w-max">
-        <div className="bg-white shadow rounded-lg overflow-hidden min-w-max">
-          <div className="p-6 space-y-6">
-            <div className="flex items-center mb-4">
-              <User className="h-5 w-5 text-navy-600 mr-2" />
-              <h2 className="text-lg font-medium text-gray-900">Guest Information</h2>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 min-w-max">
-              <div>
-                <label htmlFor="guest_name" className="block text-sm font-medium text-gray-700">
-                  Guest Name *
-                </label>
-                <input
-                  type="text"
-                  id="guest_name"
-                  name="guest_name"
-                  value={formData.guest_name}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="guest_email" className="block text-sm font-medium text-gray-700">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  id="guest_email"
-                  name="guest_email"
-                  value={formData.guest_email}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="guest_phone" className="block text-sm font-medium text-gray-700">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  id="guest_phone"
-                  name="guest_phone"
-                  value={formData.guest_phone}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white shadow rounded-lg overflow-hidden min-w-max">
-          <div className="p-6 space-y-6">
-            <div className="flex items-center mb-4">
-              <Building2 className="h-5 w-5 text-navy-600 mr-2" />
-              <h2 className="text-lg font-medium text-gray-900">Booking Details</h2>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 min-w-max">
-              <div>
-                <label htmlFor="accommodation_id" className="block text-sm font-medium text-gray-700">
-                  Accommodation *
-                </label>
-                <select
-                  id="accommodation_id"
-                  name="accommodation_id"
-                  value={formData.accommodation_id}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                  required
-                >
-                  <option value="">Select Accommodation</option>
-                  {accommodations.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="check_in" className="block text-sm font-medium text-gray-700">
-                  Check In Date *
-                </label>
-                <input
-                  type="date"
-                  id="check_in"
-                  name="check_in"
-                  value={formData.check_in}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="check_out" className="block text-sm font-medium text-gray-700">
-                  Check Out Date *
-                </label>
-                <input
-                  type="date"
-                  id="check_out"
-                  name="check_out"
-                  value={formData.check_out}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              {dateError && (
-                <div className="sm:col-span-2">
-                  <div className="text-sm text-red-600 bg-red-50 p-2 rounded-md">
-                    {dateError}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="adults" className="block text-sm font-medium text-gray-700">
-                  Adults *
-                </label>
-                <input
-                  type="number"
-                  id="adults"
-                  name="adults"
-                  min="1"
-                  value={formData.adults}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="children" className="block text-sm font-medium text-gray-700">
-                  Children
-                </label>
-                <input
-                  type="number"
-                  id="children"
-                  name="children"
-                  min="0"
-                  value={formData.children}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="rooms" className="block text-sm font-medium text-gray-700">
-                  Number of Rooms *
-                </label>
-                <input
-                  type="number"
-                  id="rooms"
-                  name="rooms"
-                  min={availableRooms > 0 ? 1 : 0}
-                  max={availableRooms}
-                  value={formData.rooms}
-                  onChange={handleChange}
-                  className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm ${availableRooms <= 0 ? 'bg-gray-100 text-gray-500' : ''
-                    }`}
-                  required
-                  disabled={availableRooms <= 0}
-                />
-                <div className="mt-1 text-sm text-gray-500">
-                  {showRoomAvailability ? (
-                    availableRooms <= 0 ? (
-                      <span className="text-red-600 font-medium">
-                        All rooms booked for the selected date
-                      </span>
-                    ) : (
-                      `${availableRooms} room(s) available (Total: ${selectedAccommodation?.available_rooms || 0
-                      }, Booked: ${bookedRooms}, Blocked: ${blockedRoomsCount})`
-                    )
-                  ) : formData.accommodation_id && !formData.check_in ? (
-                    'Select a date to see availability'
-                  ) : null}
-                </div>
-              </div>
-
-              {selectedAccommodation && (
-                <div className="sm:col-span-2">
-                  <div className="text-sm text-gray-700">
-                    <strong>Room Capacity:</strong> Max {selectedAccommodation.capacity} guests per room
-                  </div>
-                  <div className="text-sm text-gray-700 mt-1">
-                    <strong>Current Guests:</strong> {parseInt(formData.adults) + parseInt(formData.children)}
-                    {' '}guests for {formData.rooms} room(s) -
-                    {' '}Max allowed: {parseInt(formData.rooms) * selectedAccommodation.capacity}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white shadow rounded-lg overflow-hidden min-w-max">
-          <div className="p-6 space-y-6">
-            <div className="flex items-center mb-4">
-              <UtensilsCrossed className="h-5 w-5 text-navy-600 mr-2" />
-              <h2 className="text-lg font-medium text-gray-900">Food Preference</h2>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 min-w-max">
-              <div>
-                <label htmlFor="food_veg" className="block text-sm font-medium text-gray-700">
-                  Veg Count
-                </label>
-                <input
-                  type="number"
-                  id="food_veg"
-                  name="food_veg"
-                  min="0"
-                  max={parseInt(formData.adults) + parseInt(formData.children)}
-                  value={formData.food_veg}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="food_nonveg" className="block text-sm font-medium text-gray-700">
-                  Non-Veg Count
-                </label>
-                <input
-                  type="number"
-                  id="food_nonveg"
-                  name="food_nonveg"
-                  min="0"
-                  max={parseInt(formData.adults) + parseInt(formData.children)}
-                  value={formData.food_nonveg}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="food_jain" className="block text-sm font-medium text-gray-700">
-                  Jain Count
-                </label>
-                <input
-                  type="number"
-                  id="food_jain"
-                  name="food_jain"
-                  min="0"
-                  max={parseInt(formData.adults) + parseInt(formData.children)}
-                  value={formData.food_jain}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                />
-              </div>
-
-              <div className="sm:col-span-3">
-                <div className="text-sm text-gray-700">
-                  <strong>Food Preferences:</strong> Veg: {formData.food_veg},
-                  Non-Veg: {formData.food_nonveg}, Jain: {formData.food_jain}
-                  {' '} | Total: {parseInt(formData.food_veg) + parseInt(formData.food_nonveg) + parseInt(formData.food_jain)}
-                </div>
-                <div className="text-sm text-gray-700 mt-1">
-                  <strong>Total Guests:</strong> {parseInt(formData.adults) + parseInt(formData.children)}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white shadow rounded-lg overflow-hidden min-w-max">
-          <div className="p-6 space-y-6">
-            <div className="flex items-center mb-4">
-              <CreditCard className="h-5 w-5 text-navy-600 mr-2" />
-              <h2 className="text-lg font-medium text-gray-900">Payment Information</h2>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 min-w-max">
-              <div>
-                <label htmlFor="final_amount" className="block text-sm font-medium text-gray-700">
-                  Total Amount (₹) *
-                </label>
-                <input
-                  type="number"
-                  id="final_amount"
-                  step="0.01"
-                  value={formData.discounted_amount}
-                  readOnly
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm bg-gray-100"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="coupon_code" className="block text-sm font-medium text-gray-700">
-                  Coupon Code
-                </label>
-                <div className="relative">
-                  <div className="flex gap-2 mt-1">
-                    <input
-                      type="text"
-                      id="coupon_code"
-                      name="coupon_code"
-                      value={formData.coupon_code}
-                      onChange={handleChange}
-                      className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                      placeholder="Enter coupon code"
-                      disabled={!!appliedCoupon}
-                    />
-                    {appliedCoupon ? (
-                      <button
-                        type="button"
-                        onClick={removeCoupon}
-                        className="px-4 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600"
-                      >
-                        Remove
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={applyCoupon}
-                        className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
-                      >
-                        Apply
-                      </button>
-                    )}
-                  </div>
-                  {availableCoupons.length > 0 && !appliedCoupon && (
-                    <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-auto min-w-[300px]">
-                      {availableCoupons.map(coupon => (
-                        <div
-                          key={coupon.id}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                          onClick={() => handleCouponSelect(coupon)}
+        <div className="space-y-6 pb-16 md:pb-0 w-full max-w-full overflow-x-auto">
+            <div className="sm:flex sm:items-center sm:justify-between min-w-max">
+                <div>
+                    <div className="flex items-center">
+                        <button
+                            onClick={() => navigate("/bookings")}
+                            className="mr-2 text-gray-400 hover:text-gray-500"
                         >
-                          <div className="font-medium">{coupon.code}</div>
-                          <div className="text-gray-500">
-                            {coupon.discountType === 'percentage'
-                              ? `${coupon.discount}% off`
-                              : `₹${coupon.discount} off`}
-                          </div>
-                        </div>
-                      ))}
+                            <ArrowLeft className="h-5 w-5" />
+                        </button>
+                        <h1 className="text-2xl font-bold text-gray-900">
+                            Create New Booking
+                        </h1>
                     </div>
-                  )}
+                    <p className="mt-1 text-sm text-gray-500">
+                        Add a new booking manually
+                    </p>
                 </div>
-                {couponError && (
-                  <div className="mt-1 text-sm text-red-600 bg-red-50 p-2 rounded-md">
-                    {couponError}
-                  </div>
-                )}
-                {appliedCoupon && (
-                  <div className="mt-1 text-sm text-green-600 bg-green-50 p-2 rounded-md">
-                    Coupon applied: {appliedCoupon.code} - {appliedCoupon.discountType === 'percentage'
-                      ? `${appliedCoupon.discount}% discount`
-                      : `₹${appliedCoupon.discount} discount`}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="advance_amount" className="block text-sm font-medium text-gray-700">
-                  Advance Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  id="advance_amount"
-                  name="advance_amount"
-                  step="0.01"
-                  min="0"
-                  value={formData.advance_amount}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700">
-                  Payment Method
-                </label>
-                <select
-                  id="payment_method"
-                  name="payment_method"
-                  value={formData.payment_method}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                >
-                  {paymentMethods.map(method => (
-                    <option key={method.id} value={method.id}>{method.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-                  Notes (Optional)
-                </label>
-                <textarea
-                  id="notes"
-                  name="notes"
-                  value={formData.notes}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                  rows={3}
-                />
-              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="flex justify-end space-x-3 min-w-max">
-          <button
-            type="button"
-            onClick={() => navigate('/bookings')}
-            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-500"
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-500 disabled:opacity-50"
-            disabled={loading}
-          >
-            {loading ? 'Creating...' : 'Create Booking'}
-          </button>
+            <form
+                onSubmit={handleSubmit}
+                className="space-y-8 min-w-max"
+            >
+                <div className="bg-white shadow rounded-lg overflow-hidden min-w-max">
+                    <div className="p-6 space-y-6">
+                        <div className="flex items-center mb-4">
+                            <User className="h-5 w-5 text-navy-600 mr-2" />
+                            <h2 className="text-lg font-medium text-gray-900">
+                                Guest Information
+                            </h2>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 min-w-max">
+                            <div>
+                                <label
+                                    htmlFor="guest_name"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Guest Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    id="guest_name"
+                                    name="guest_name"
+                                    value={formData.guest_name}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="guest_email"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Email *
+                                </label>
+                                <input
+                                    type="email"
+                                    id="guest_email"
+                                    name="guest_email"
+                                    value={formData.guest_email}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="guest_phone"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Phone
+                                </label>
+                                <input
+                                    type="tel"
+                                    id="guest_phone"
+                                    name="guest_phone"
+                                    value={formData.guest_phone}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white shadow rounded-lg overflow-hidden min-w-max">
+                    <div className="p-6 space-y-6">
+                        <div className="flex items-center mb-4">
+                            <Building2 className="h-5 w-5 text-navy-600 mr-2" />
+                            <h2 className="text-lg font-medium text-gray-900">
+                                Booking Details
+                            </h2>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 min-w-max">
+                            <div>
+                                <label
+                                    htmlFor="accommodation_id"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Accommodation *
+                                </label>
+                                <select
+                                    id="accommodation_id"
+                                    name="accommodation_id"
+                                    value={formData.accommodation_id}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                    required
+                                >
+                                    <option value="">
+                                        Select Accommodation
+                                    </option>
+                                    {accommodations.map((acc) => (
+                                        <option
+                                            key={acc.id}
+                                            value={acc.id}
+                                        >
+                                            {acc.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="check_in"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Check In Date *
+                                </label>
+                                <input
+                                    type="date"
+                                    id="check_in"
+                                    name="check_in"
+                                    value={formData.check_in}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="check_out"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Check Out Date *
+                                </label>
+                                <input
+                                    type="date"
+                                    id="check_out"
+                                    name="check_out"
+                                    value={formData.check_out}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                    required
+                                />
+                            </div>
+
+                            {dateError && (
+                                <div className="sm:col-span-2">
+                                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded-md">
+                                        {dateError}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div>
+                                <label
+                                    htmlFor="adults"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Adults *
+                                </label>
+                                <input
+                                    type="number"
+                                    id="adults"
+                                    name="adults"
+                                    min="1"
+                                    value={formData.adults}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="children"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Children
+                                </label>
+                                <input
+                                    type="number"
+                                    id="children"
+                                    name="children"
+                                    min="0"
+                                    value={formData.children}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="rooms"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Number of Rooms *
+                                </label>
+                                <input
+                                    type="number"
+                                    id="rooms"
+                                    name="rooms"
+                                    min={availableRooms > 0 ? 1 : 0}
+                                    max={availableRooms}
+                                    value={formData.rooms}
+                                    onChange={handleChange}
+                                    className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm ${
+                                        availableRooms <= 0
+                                            ? "bg-gray-100 text-gray-500"
+                                            : ""
+                                    }`}
+                                    required
+                                    disabled={availableRooms <= 0}
+                                />
+                                <div className="mt-1 text-sm text-gray-500">
+                                    {showRoomAvailability ? (
+                                        availableRooms <= 0 ? (
+                                            <span className="text-red-600 font-medium">
+                                                All rooms booked for the
+                                                selected date
+                                            </span>
+                                        ) : (
+                                            `${availableRooms} room(s) available (Total: ${
+                                                selectedAccommodation?.available_rooms ||
+                                                0
+                                            }, Booked: ${bookedRooms}, Blocked: ${blockedRoomsCount})`
+                                        )
+                                    ) : formData.accommodation_id &&
+                                      !formData.check_in ? (
+                                        "Select a date to see availability"
+                                    ) : null}
+                                </div>
+                            </div>
+
+                            {selectedAccommodation && (
+                                <div className="sm:col-span-2">
+                                    <div className="text-sm text-gray-700">
+                                        <strong>Room Capacity:</strong> Max{" "}
+                                        {selectedAccommodation.capacity} guests
+                                        per room
+                                    </div>
+                                    <div className="text-sm text-gray-700 mt-1">
+                                        <strong>Current Guests:</strong>{" "}
+                                        {parseInt(formData.adults) +
+                                            parseInt(formData.children)}{" "}
+                                        guests for {formData.rooms} room(s) -{" "}
+                                        Max allowed:{" "}
+                                        {parseInt(formData.rooms) *
+                                            selectedAccommodation.capacity}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white shadow rounded-lg overflow-hidden min-w-max">
+                    <div className="p-6 space-y-6">
+                        <div className="flex items-center mb-4">
+                            <UtensilsCrossed className="h-5 w-5 text-navy-600 mr-2" />
+                            <h2 className="text-lg font-medium text-gray-900">
+                                Food Preference
+                            </h2>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 min-w-max">
+                            <div>
+                                <label
+                                    htmlFor="food_veg"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Veg Count
+                                </label>
+                                <input
+                                    type="number"
+                                    id="food_veg"
+                                    name="food_veg"
+                                    min="0"
+                                    max={
+                                        parseInt(formData.adults) +
+                                        parseInt(formData.children)
+                                    }
+                                    value={formData.food_veg}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="food_nonveg"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Non-Veg Count
+                                </label>
+                                <input
+                                    type="number"
+                                    id="food_nonveg"
+                                    name="food_nonveg"
+                                    min="0"
+                                    max={
+                                        parseInt(formData.adults) +
+                                        parseInt(formData.children)
+                                    }
+                                    value={formData.food_nonveg}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="food_jain"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Jain Count
+                                </label>
+                                <input
+                                    type="number"
+                                    id="food_jain"
+                                    name="food_jain"
+                                    min="0"
+                                    max={
+                                        parseInt(formData.adults) +
+                                        parseInt(formData.children)
+                                    }
+                                    value={formData.food_jain}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                />
+                            </div>
+
+                            <div className="sm:col-span-3">
+                                <div className="text-sm text-gray-700">
+                                    <strong>Food Preferences:</strong> Veg:{" "}
+                                    {formData.food_veg}, Non-Veg:{" "}
+                                    {formData.food_nonveg}, Jain:{" "}
+                                    {formData.food_jain} | Total:{" "}
+                                    {parseInt(formData.food_veg) +
+                                        parseInt(formData.food_nonveg) +
+                                        parseInt(formData.food_jain)}
+                                </div>
+                                <div className="text-sm text-gray-700 mt-1">
+                                    <strong>Total Guests:</strong>{" "}
+                                    {parseInt(formData.adults) +
+                                        parseInt(formData.children)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white shadow rounded-lg overflow-hidden min-w-max">
+                    <div className="p-6 space-y-6">
+                        <div className="flex items-center mb-4">
+                            <CreditCard className="h-5 w-5 text-navy-600 mr-2" />
+                            <h2 className="text-lg font-medium text-gray-900">
+                                Payment Information
+                            </h2>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 min-w-max">
+                            <div>
+                                <label
+                                    htmlFor="final_amount"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Total Amount (₹) *
+                                </label>
+                                <input
+                                    type="number"
+                                    id="final_amount"
+                                    step="0.01"
+                                    value={formData.discounted_amount}
+                                    readOnly
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm bg-gray-100"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="coupon_code"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Coupon Code
+                                </label>
+                                <div className="relative">
+                                    <div className="flex gap-2 mt-1">
+                                        <input
+                                            type="text"
+                                            id="coupon_code"
+                                            name="coupon_code"
+                                            value={formData.coupon_code}
+                                            onChange={handleChange}
+                                            className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                            placeholder="Enter coupon code"
+                                            disabled={!!appliedCoupon}
+                                        />
+                                        {appliedCoupon ? (
+                                            <button
+                                                type="button"
+                                                onClick={removeCoupon}
+                                                className="px-4 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600"
+                                            >
+                                                Remove
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={applyCoupon}
+                                                className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
+                                            >
+                                                Apply
+                                            </button>
+                                        )}
+                                    </div>
+                                    {availableCoupons.length > 0 &&
+                                        !appliedCoupon && (
+                                            <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-auto min-w-[300px]">
+                                                {availableCoupons.map(
+                                                    (coupon) => (
+                                                        <div
+                                                            key={coupon.id}
+                                                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                                            onClick={() =>
+                                                                handleCouponSelect(
+                                                                    coupon,
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="font-medium">
+                                                                {coupon.code}
+                                                            </div>
+                                                            <div className="text-gray-500">
+                                                                {coupon.discountType ===
+                                                                "percentage"
+                                                                    ? `${coupon.discount}% off`
+                                                                    : `₹${coupon.discount} off`}
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
+                                        )}
+                                </div>
+                                {couponError && (
+                                    <div className="mt-1 text-sm text-red-600 bg-red-50 p-2 rounded-md">
+                                        {couponError}
+                                    </div>
+                                )}
+                                {appliedCoupon && (
+                                    <div className="mt-1 text-sm text-green-600 bg-green-50 p-2 rounded-md">
+                                        Coupon applied: {appliedCoupon.code} -{" "}
+                                        {appliedCoupon.discountType ===
+                                        "percentage"
+                                            ? `${appliedCoupon.discount}% discount`
+                                            : `₹${appliedCoupon.discount} discount`}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="advance_amount"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Advance Amount (₹)
+                                </label>
+                                <input
+                                    type="number"
+                                    id="advance_amount"
+                                    name="advance_amount"
+                                    step="0.01"
+                                    min="0"
+                                    value={formData.advance_amount}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="payment_method"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Payment Method
+                                </label>
+                                <select
+                                    id="payment_method"
+                                    name="payment_method"
+                                    value={formData.payment_method}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                >
+                                    {paymentMethods.map((method) => (
+                                        <option
+                                            key={method.id}
+                                            value={method.id}
+                                        >
+                                            {method.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="notes"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Notes (Optional)
+                                </label>
+                                <textarea
+                                    id="notes"
+                                    name="notes"
+                                    value={formData.notes}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
+                                    rows={3}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 min-w-max">
+                    <button
+                        type="button"
+                        onClick={() => navigate("/bookings")}
+                        className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-500"
+                        disabled={loading}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-500 disabled:opacity-50"
+                        disabled={loading}
+                    >
+                        {loading ? "Creating..." : "Create Booking"}
+                    </button>
+                </div>
+            </form>
         </div>
-      </form>
-    </div>
-  );
+    );
 };
 
 export default CreateBooking;
