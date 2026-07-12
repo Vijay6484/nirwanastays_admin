@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { BASE_URL } from "../config/config";
+import { uploadImageFile } from "../utils/uploadMedia";
 // ── Icons ──────────────────────────────────────────────────────────────────
 import { X, SquarePen, Eye, Plus, Trash2, Search } from "lucide-react";
 
@@ -328,8 +329,27 @@ function FormModal({
     const [errors, setErrors] = useState<
         Partial<Record<keyof FormData, string>>
     >({});
+    const [uploadingBanner, setUploadingBanner] = useState(false);
     const set = (k: keyof FormData, v: string | number | boolean | null) =>
         setForm((f) => ({ ...f, [k]: v }));
+
+    const handleBannerUpload = async (
+        e: React.ChangeEvent<HTMLInputElement>,
+    ) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setUploadingBanner(true);
+            const result = await uploadImageFile(file, "promotions");
+            set("bannerUrl", result.url);
+        } catch (error) {
+            console.error("Banner upload error:", error);
+        } finally {
+            setUploadingBanner(false);
+            e.target.value = "";
+        }
+    };
 
     const validate = () => {
         const e: typeof errors = {};
@@ -494,15 +514,29 @@ function FormModal({
                     </div>
 
                     <div>
-                        <label className={labelCls}>Banner Image URL</label>
-                        <input
-                            className={inputCls("bannerUrl")}
-                            placeholder="https://..."
-                            value={str(form.bannerUrl)}
-                            onChange={(e) =>
-                                set("bannerUrl", e.target.value || null)
-                            }
-                        />
+                        <label className={labelCls}>Banner Image</label>
+                        <div className="flex flex-col gap-2">
+                            <input
+                                className={inputCls("bannerUrl")}
+                                placeholder="https://api.nirwanastays.com/storage/promotions/..."
+                                value={str(form.bannerUrl)}
+                                onChange={(e) =>
+                                    set("bannerUrl", e.target.value || null)
+                                }
+                            />
+                            <label className="inline-flex items-center gap-2 w-fit px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleBannerUpload}
+                                    disabled={uploadingBanner}
+                                />
+                                {uploadingBanner
+                                    ? "Uploading..."
+                                    : "Upload banner image"}
+                            </label>
+                        </div>
                         {errors.bannerUrl && (
                             <p className="text-red-500 text-xs mt-1">
                                 {errors.bannerUrl}

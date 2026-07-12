@@ -5,6 +5,11 @@ import { Download, Filter, Search, XCircle, DollarSign, Calendar, CreditCard, Us
 import BookingDetailsModal from '../components/BookingDetailsModal';
 import AddPaymentModal from '../components/AddPaymentModal';
 import { BASE_URL} from '../config/config'
+import {
+  computeBookingTariff,
+  derivePaymentStatus,
+  formatInr,
+} from '../utils/bookingTariff';
 
 interface ApiBooking {
   id: number;
@@ -22,6 +27,7 @@ interface ApiBooking {
   rooms: number;
   total_amount: string;
   advance_amount: string;
+  Discount?: string;
   payment_status: string;
   payment_txn_id: string | null;
   created_at: string;
@@ -55,8 +61,10 @@ interface Booking {
   children: number;
   rooms: number;
   amount: string;
+  grossAmount: string;
+  discountAmount: string;
   paidAmount: string;
-  remainingAmount: string; // Added remaining amount
+  remainingAmount: string;
   paymentStatus: 'Paid' | 'Partial' | 'Unpaid' | 'Pending';
   bookingStatus: 'Confirmed' | 'Pending' | 'Cancelled';
   paymentTxnId: string | null;
@@ -105,29 +113,19 @@ const Bookings: React.FC = () => {
   const API_BASE_URL = `${BASE_URL}/admin`;
 
   const mapApiBookingToBooking = (apiBooking: ApiBooking): Booking => {
-    let paymentStatus: 'Paid' | 'Partial' | 'Unpaid' | 'Pending' = 'Pending';
-    
-    // Handle empty payment_status as Pending
-    switch (apiBooking.payment_status) {
-      case 'success':
-        paymentStatus = 'Paid';
-        break;
-      case 'partial':
-        paymentStatus = 'Partial';
-        break;
-      case 'failed':
-        paymentStatus = 'Unpaid';
-        break;
-      case '':
-      default:
-        paymentStatus = 'Pending';
-    }
+    const tariff = computeBookingTariff({
+      total_amount: apiBooking.total_amount,
+      Discount: apiBooking.Discount,
+      advance_amount: apiBooking.advance_amount,
+    });
+
+    const paymentStatus = derivePaymentStatus(
+      apiBooking.payment_status,
+      tariff.advanceAmount,
+      tariff.netPayable,
+    );
 
     const bookingStatus = 'Confirmed';
-    
-    const totalAmount = parseFloat(apiBooking.total_amount);
-    const paidAmount = parseFloat(apiBooking.advance_amount);
-    const remainingAmount = totalAmount - paidAmount;
 
     return {
       id: apiBooking.id,
@@ -145,9 +143,11 @@ const Bookings: React.FC = () => {
       adults: apiBooking.adults,
       children: apiBooking.children,
       rooms: apiBooking.rooms,
-      amount: `₹${totalAmount.toLocaleString('en-IN')}`,
-      paidAmount: `₹${paidAmount.toLocaleString('en-IN')}`,
-      remainingAmount: `₹${remainingAmount.toLocaleString('en-IN')}`, // Added remaining amount
+      amount: formatInr(tariff.netPayable),
+      grossAmount: formatInr(tariff.grossAmount),
+      discountAmount: formatInr(tariff.discountAmount),
+      paidAmount: formatInr(tariff.advanceAmount),
+      remainingAmount: formatInr(tariff.remainingAmount),
       paymentStatus,
       bookingStatus,
       paymentTxnId: apiBooking.payment_txn_id,
@@ -582,10 +582,10 @@ const Bookings: React.FC = () => {
                     Check Out
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
+                    Net Amount
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Paid
+                    Advance Paid
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Remaining

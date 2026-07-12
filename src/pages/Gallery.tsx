@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Image, Search, Filter, UploadCloud, XCircle, Trash2, Edit, Eye, AlertCircle, CheckCircle } from 'lucide-react';
 import { BASE_URL } from '../config/config';
+import { uploadImageFile } from '../utils/uploadMedia';
 
 interface GalleryImage {
   id: string;
@@ -143,31 +144,11 @@ const Gallery = () => {
       const uploadedImages: { src: string; alt: string }[] = [];
 
       for (const file of Array.from(files)) {
-        const formData = new FormData();
-        formData.append('image', file);
-
-        const res = await fetch('https://plumeriaretreat.com/upload.php', {
-          method: 'POST',
-          body: formData,
+        const result = await uploadImageFile(file, 'gallery');
+        uploadedImages.push({
+          src: result.url,
+          alt: details.alt_text || file.name,
         });
-        const rawText = await res.text();
-        let data: any;
-
-        try {
-          data = JSON.parse(rawText);
-        } catch (err) {
-          console.error('Non-JSON PHP response:', rawText);
-          throw new Error(`Server error: ${rawText || res.statusText}`);
-        }
-
-        if (data.success && data.filename) {
-          uploadedImages.push({
-            src: data.url,
-            alt: details.alt_text || file.name,
-          });
-        } else {
-          throw new Error(data.message || 'Upload failed on server');
-        }
       }
 
       const response = await fetch(`${API_BASE_URL}/admin/gallery/upload`, {

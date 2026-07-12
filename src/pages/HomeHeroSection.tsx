@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { BASE_URL } from "../config/config";
+import { uploadImageFile } from "../utils/uploadMedia";
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 import { X, SquarePen, Eye, Plus, Trash2, Search } from "lucide-react";
@@ -102,6 +103,27 @@ export default function HomeHeroSection() {
     const [accommodations, setAccommodations] = useState<Accommodation[]>([]);
     const [pageNo, setPageNo] = useState(1);
     const [limit, setLimit] = useState(10);
+    const [uploadingHeroImage, setUploadingHeroImage] = useState(false);
+
+    const handleHeroImageUpload = async (
+        e: React.ChangeEvent<HTMLInputElement>,
+    ) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setUploadingHeroImage(true);
+            const result = await uploadImageFile(file, "hero");
+            setForm((prev) => ({ ...prev, imgUrl: result.url }));
+            pushNotif("success", "Hero image uploaded");
+        } catch (error) {
+            console.error("Hero image upload error:", error);
+            pushNotif("error", "Failed to upload hero image");
+        } finally {
+            setUploadingHeroImage(false);
+            e.target.value = "";
+        }
+    };
 
     const pushNotif = (type: NotifType, msg: string) => {
         const id = Date.now();
@@ -660,18 +682,32 @@ export default function HomeHeroSection() {
                                 />
                             </div>
                             <div>
-                                <label className={labelCls}>Image URL *</label>
-                                <input
-                                    className={inputCls}
-                                    placeholder="https://…"
-                                    value={form.imgUrl ?? ""}
-                                    onChange={(e) =>
-                                        setForm({
-                                            ...form,
-                                            imgUrl: e.target.value,
-                                        })
-                                    }
-                                />
+                                <label className={labelCls}>Hero Image</label>
+                                <div className="space-y-2">
+                                    <input
+                                        className={inputCls}
+                                        placeholder="https://api.nirwanastays.com/storage/hero/..."
+                                        value={form.imgUrl ?? ""}
+                                        onChange={(e) =>
+                                            setForm({
+                                                ...form,
+                                                imgUrl: e.target.value,
+                                            })
+                                        }
+                                    />
+                                    <label className="inline-flex items-center gap-2 w-fit px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 cursor-pointer">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleHeroImageUpload}
+                                            disabled={uploadingHeroImage}
+                                        />
+                                        {uploadingHeroImage
+                                            ? "Uploading..."
+                                            : "Upload hero image"}
+                                    </label>
+                                </div>
                             </div>
                             <div>
                                 <label className={labelCls}>Start Date</label>

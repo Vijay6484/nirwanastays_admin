@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .rich-text-editor .ql-container {
+    @apply bg-white rounded-b-md;
+    min-height: inherit;
+  }
+
+  .rich-text-editor .ql-editor {
+    min-height: inherit;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .rich-text-editor .ql-toolbar {
+    @apply bg-gray-50 rounded-t-md border-gray-300;
+  }
+}
+
 @layer base {
   *, *::before, *::after { @apply box-border; }
   html, body { @apply h-full m-0 p-0; }

@@ -3,6 +3,7 @@ import { Plus, Search, Trash2, Edit2, XCircle, AlertCircle, CheckCircle, Loader 
 import { Link, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { BASE_URL } from '../config/config'
+import { resolveMediaUrl } from '../utils/uploadMedia';
 
 const API_BASE_URL = `${BASE_URL}/admin/blogs`;
 
@@ -129,9 +130,7 @@ const Blogs: React.FC = () => {
 
   const getImageUrl = (image: string) => {
     if (!image) return 'https://images.pexels.com/photos/2666598/pexels-photo-2666598.jpeg';
-    if (image.startsWith('http')) return image;
-    if (image.startsWith('/uploads')) return `${BASE_URL}${image}`;
-    return image;
+    return resolveMediaUrl(image);
   };
 
   return (

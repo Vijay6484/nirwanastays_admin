@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Coffee, Save, Loader, AlertCircle, Upload } from 'lucide-react';
 import { BASE_URL } from '../config/config';
+import { uploadImageFile } from '../utils/uploadMedia';
 
 const API_BASE_URL =  `${BASE_URL}/admin`;
 
@@ -105,22 +106,11 @@ const ServiceForm = () => {
       setUploading(true);
       setError('');
 
-      const formDataUpload = new FormData();
-      formDataUpload.append('image', file);
+      const result = await uploadImageFile(file, 'services');
 
-      const response = await fetch(`${API_BASE_URL}/upload`, {
-        method: 'POST',
-        body: formDataUpload,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to upload image');
-      }
-
-      const { imageUrl }: ImageUploadResponse = await response.json();
       setFormData(prev => ({
         ...prev,
-        image: imageUrl
+        image: result.imageUrl
       }));
 
       setSuccess('Image uploaded successfully!');

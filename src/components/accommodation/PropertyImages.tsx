@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { BASE_URL } from "../../config/config";
+import { uploadImageFile } from "../../utils/uploadMedia";
 import AccommodationImageModal from "./AccommodationImageModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -389,14 +390,13 @@ export default function PropertyImages({
 
     const getImageUrl = async (file: File): Promise<string | undefined> => {
         if (!file) return;
-        const formDataFile = new FormData();
-        formDataFile.append("image", file);
-        const res = await axios.post(
-            "https://plumeriaretreat.com/upload.php",
-            formDataFile,
-            { headers: { "Content-Type": "multipart/form-data" } },
-        );
-        if (res.data.success) return res.data.url;
+        try {
+            const result = await uploadImageFile(file, "accommodations");
+            return result.url;
+        } catch (error) {
+            console.error("Image upload error:", error);
+            showToast("Failed to upload image", "error");
+        }
     };
 
     const handleEditImage = (imageId: number) => {

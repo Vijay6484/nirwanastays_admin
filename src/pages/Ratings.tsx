@@ -117,9 +117,9 @@ const Ratings = () => {
       // Create form data for file upload
       const formData = new FormData();
       formData.append('image', file);
+      formData.append('folder', 'ratings');
 
-      // Upload image to server
-      const response = await api.post('/admin/upload', formData, {
+      const response = await api.post('/upload?folder=ratings', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

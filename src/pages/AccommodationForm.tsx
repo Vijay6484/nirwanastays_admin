@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import ReactQuill from "react-quill";
-// import 'react-quill/dist/quill.snow.css';
 import { useParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
-// import 'react-toastify/dist/ReactToastify.css';
+import RichTextEditor from "../components/RichTextEditor";
+import { isRichTextEmpty } from "../utils/richText";
 import { BASE_URL } from "../config/config";
+import { uploadImageFile } from "../utils/uploadMedia";
 import {
     ArrowLeft,
     Building2,
@@ -344,7 +344,7 @@ const AccommodationForm: React.FC = () => {
         if (!formData.name.trim()) {
             newErrors.name = "Name is required";
         }
-        if (!formData.description.trim()) {
+        if (isRichTextEmpty(formData.description)) {
             newErrors.description = "Description is required";
         }
         if (!formData.type) {
@@ -359,7 +359,10 @@ const AccommodationForm: React.FC = () => {
         if (formData.rooms <= 0) {
             newErrors.rooms = "Rooms must be greater than 0";
         }
-        if (formData.packageName && !formData.packageDescription) {
+        if (
+            formData.packageName &&
+            isRichTextEmpty(formData.packageDescription)
+        ) {
             newErrors.packageDescription = "Package description is required";
         }
 
@@ -475,22 +478,8 @@ const AccommodationForm: React.FC = () => {
 
         try {
             for (const file of newImageFiles) {
-                const formDataFile = new FormData();
-                formDataFile.append("image", file);
-
-                const res = await axios.post(
-                    "https://plumeriaretreat.com/upload.php",
-                    formDataFile,
-                    {
-                        headers: {
-                            "Content-Type": "multipart/form-data",
-                        },
-                    },
-                );
-                console.log("Upload response:", res.data);
-                if (res.data.success && res.data.filename) {
-                    uploadedUrls.push(res.data.url);
-                }
+                const result = await uploadImageFile(file, "accommodations");
+                uploadedUrls.push(result.url);
             }
             return uploadedUrls;
         } catch (error) {
@@ -684,17 +673,22 @@ const AccommodationForm: React.FC = () => {
                                     Description *
                                 </label>
                                 <div className="mt-1">
-                                    <textarea
-                                        id="description"
-                                        name="description"
-                                        rows={3}
+                                    <RichTextEditor
                                         value={formData.description}
-                                        onChange={handleChange}
-                                        className={`shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md ${
-                                            errors.description
-                                                ? "border-red-300"
-                                                : "border-gray-300"
-                                        }`}
+                                        onChange={(value) => {
+                                            setFormData({
+                                                ...formData,
+                                                description: value,
+                                            });
+                                            if (errors.description) {
+                                                setErrors({
+                                                    ...errors,
+                                                    description: "",
+                                                });
+                                            }
+                                        }}
+                                        placeholder="Paste or write the property description..."
+                                        minHeight="220px"
                                     />
                                     {errors.description && (
                                         <p className="mt-1 text-sm text-red-600">
@@ -1184,8 +1178,7 @@ const AccommodationForm: React.FC = () => {
                                     Package Description
                                 </label>
                                 <div className="mt-1">
-                                    <ReactQuill
-                                        theme="snow"
+                                    <RichTextEditor
                                         value={formData.packageDescription}
                                         onChange={(value) => {
                                             setFormData({
@@ -1199,6 +1192,8 @@ const AccommodationForm: React.FC = () => {
                                                 });
                                             }
                                         }}
+                                        placeholder="Paste or write package details..."
+                                        minHeight="220px"
                                     />
                                     {errors.packageDescription && (
                                         <p className="mt-1 text-sm text-red-600">

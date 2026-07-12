@@ -16,8 +16,11 @@ interface Booking {
   rooms: number;
   guests: number;
   amount: string;
+  grossAmount?: string;
+  discountAmount?: string;
   paidAmount: string;
-  paymentStatus: 'Paid' | 'Partial' | 'Unpaid';
+  remainingAmount?: string;
+  paymentStatus: 'Paid' | 'Partial' | 'Unpaid' | 'Pending';
   bookingStatus: 'Confirmed' | 'Pending' | 'Cancelled';
   specialRequests?: string;
   mealPlan?: string;
@@ -59,6 +62,8 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ booking, onCl
         return 'text-green-600';
       case 'Partial':
         return 'text-yellow-600';
+      case 'Pending':
+        return 'text-blue-600';
       default:
         return 'text-red-600';
     }
@@ -218,14 +223,32 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ booking, onCl
                       <CreditCard className="h-4 w-4 mr-1" /> Payment Details
                     </h4>
                     <div className="bg-gray-50 p-3 rounded-md">
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {booking.grossAmount && booking.discountAmount && booking.discountAmount !== '₹0' && (
+                          <>
+                            <div>
+                              <p className="text-xs text-gray-500">Gross Amount</p>
+                              <p className="text-sm font-medium text-gray-900">{booking.grossAmount}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Discount</p>
+                              <p className="text-sm font-medium text-green-600">-{booking.discountAmount}</p>
+                            </div>
+                          </>
+                        )}
                         <div>
-                          <p className="text-xs text-gray-500">Total Amount</p>
+                          <p className="text-xs text-gray-500">Net Payable</p>
                           <p className="text-sm font-medium text-gray-900">{booking.amount}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Paid Amount</p>
+                          <p className="text-xs text-gray-500">Advance Paid</p>
                           <p className="text-sm font-medium text-gray-900">{booking.paidAmount}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Remaining</p>
+                          <p className="text-sm font-medium text-emerald-600">
+                            {booking.remainingAmount || '₹0'}
+                          </p>
                         </div>
                         <div>
                           <p className="text-xs text-gray-500">Payment Status</p>
