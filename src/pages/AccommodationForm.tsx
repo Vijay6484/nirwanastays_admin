@@ -1251,7 +1251,21 @@ const AccommodationForm: React.FC = () => {
                 </div>
 
                 {/* Property Images */}
-                <PropertyImages accommodationId={Number(id)} />
+                {isEditing && id ? (
+                    <PropertyImages accommodationId={Number(id)} />
+                ) : (
+                    <div className="bg-white shadow rounded-lg overflow-hidden">
+                        <div className="p-6 space-y-4">
+                            <h2 className="text-lg font-medium text-gray-900 border-b pb-2">
+                                Property Images
+                            </h2>
+                            <div className="flex flex-col items-center justify-center py-10 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">
+                                <p className="font-medium text-sm text-gray-600">Property images can be uploaded after saving the property details.</p>
+                                <p className="text-xs text-gray-400 mt-1">Please create the property first, then edit it to add images.</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Form Actions */}
                 <div className="flex justify-end space-x-3">
