@@ -321,8 +321,10 @@ const AccommodationForm: React.FC = () => {
         }
         // If it's a new image (file), remove from both formData and newImageFiles
         else {
-            // Find the index of the image in newImageFiles
-            const index = formData.images.indexOf(image);
+            // Find the correct index in newImageFiles by filtering out existing images
+            const index = formData.images
+                .filter((img) => !existingImages.includes(img))
+                .indexOf(image);
 
             setFormData({
                 ...formData,
@@ -330,11 +332,13 @@ const AccommodationForm: React.FC = () => {
             });
 
             // Remove the corresponding file
-            setNewImageFiles((prevFiles) => {
-                const newFiles = [...prevFiles];
-                newFiles.splice(index, 1);
-                return newFiles;
-            });
+            if (index !== -1) {
+                setNewImageFiles((prevFiles) => {
+                    const newFiles = [...prevFiles];
+                    newFiles.splice(index, 1);
+                    return newFiles;
+                });
+            }
         }
     };
 
@@ -1250,19 +1254,56 @@ const AccommodationForm: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Property Images */}
                 {isEditing && id ? (
                     <PropertyImages accommodationId={Number(id)} />
                 ) : (
                     <div className="bg-white shadow rounded-lg overflow-hidden">
-                        <div className="p-6 space-y-4">
+                        <div className="p-6 space-y-6">
                             <h2 className="text-lg font-medium text-gray-900 border-b pb-2">
                                 Property Images
                             </h2>
-                            <div className="flex flex-col items-center justify-center py-10 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">
-                                <p className="font-medium text-sm text-gray-600">Property images can be uploaded after saving the property details.</p>
-                                <p className="text-xs text-gray-400 mt-1">Please create the property first, then edit it to add images.</p>
+                            
+                            {/* Drag and Drop Zone */}
+                            <div className="border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50/20 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors relative">
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    onChange={handleImageFileChange}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    id="property-images-upload"
+                                />
+                                <div className="text-gray-400 mb-2">
+                                    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                </div>
+                                <p className="text-sm font-medium text-gray-700">Click to upload or drag & drop images</p>
+                                <p className="text-xs text-gray-500 mt-1">PNG, JPG, WEBP — select multiple files</p>
                             </div>
+
+                            {/* Previews Grid */}
+                            {formData.images.length > 0 && (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+                                    {formData.images.map((img, idx) => (
+                                        <div key={idx} className="relative aspect-video sm:aspect-square bg-gray-100 rounded-lg overflow-hidden group shadow-sm border border-gray-200">
+                                            <img
+                                                src={img}
+                                                alt={`Preview ${idx + 1}`}
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeImage(img)}
+                                                className="absolute top-1.5 right-1.5 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600 transition-colors"
+                                                aria-label="Remove image"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
