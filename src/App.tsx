@@ -27,6 +27,7 @@ import Success from "./pages/Success";
 import Failure from "./pages/Failure";
 import OffersAndPromotion from "./pages/OffersAndPromotion";
 import HomeHeroSection from "./pages/HomeHeroSection";
+import { SEODashboard } from "./components/seo/SEODashboard";
 
 function App() {
     const user = JSON.parse(localStorage.getItem("authUser") || "{}");
@@ -143,6 +144,10 @@ function App() {
                             <Route
                                 path="offers-promotion"
                                 element={<OffersAndPromotion />}
+                            />
+                            <Route
+                                path="seo-dashboard"
+                                element={<SEODashboard />}
                             />
                             <Route
                                 path="*"

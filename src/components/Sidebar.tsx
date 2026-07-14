@@ -52,6 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, closeSidebar }) => {
             icon: <Wallpaper size={20} />,
         },
         { name: "Blogs", path: "/blogs", icon: <FileText size={20} /> },
+        { name: "SEO Dashboard", path: "/seo-dashboard", icon: <FileText size={20} /> },
         { name: "Categories", path: "/categories", icon: <Grid size={20} /> },
         { name: "Users", path: "/users", icon: <Users size={20} /> },
     ];

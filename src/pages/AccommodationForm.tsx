@@ -50,6 +50,12 @@ interface Accommodation {
     // Villa-specific fields
     maxPersonsVilla?: number;
     extraPersonRate?: number;
+
+    // SEO-specific fields
+    metaTitle?: string;
+    metaDescription?: string;
+    metaKeywords?: string;
+    schemaMarkup?: string;
 }
 
 interface User {
@@ -113,6 +119,12 @@ const AccommodationForm: React.FC = () => {
         // Villa defaults
         maxPersonsVilla: 0,
         extraPersonRate: 0,
+
+        // SEO fields defaults
+        metaTitle: "",
+        metaDescription: "",
+        metaKeywords: "",
+        schemaMarkup: "",
     });
 
     const [users, setUsers] = useState<User[]>([]);
@@ -202,6 +214,12 @@ const AccommodationForm: React.FC = () => {
                 // Map villa fields if present in basicInfo
                 maxPersonsVilla: data.basicInfo?.maxPersonsVilla || 0,
                 extraPersonRate: data.basicInfo?.extraPersonRate || 0,
+
+                // Map SEO fields
+                metaTitle: data.basicInfo?.metaTitle || "",
+                metaDescription: data.basicInfo?.metaDescription || "",
+                metaKeywords: data.basicInfo?.metaKeywords || "",
+                schemaMarkup: data.basicInfo?.schemaMarkup || "",
             });
         } catch (error) {
             console.error("Error fetching accommodation:", error);
@@ -420,6 +438,10 @@ const AccommodationForm: React.FC = () => {
                     features: formData.features,
                     images: allImages, // Use the combined image array
                     available: formData.available,
+                    metaTitle: formData.metaTitle,
+                    metaDescription: formData.metaDescription,
+                    metaKeywords: formData.metaKeywords,
+                    schemaMarkup: formData.schemaMarkup,
 
                     // Villa fields inside basicInfo (if villa selected)
                     ...(formData.type === "Villa"
@@ -1307,6 +1329,180 @@ const AccommodationForm: React.FC = () => {
                         </div>
                     </div>
                 )}
+                {/* SEO Settings */}
+                <div className="bg-white shadow rounded-lg overflow-hidden">
+                    <div className="p-6 space-y-6">
+                        <div className="flex items-center space-x-3 border-b pb-4">
+                            <h2 className="text-lg font-medium text-gray-900">
+                                Search Engine Optimization (SEO)
+                            </h2>
+                            <span className="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-medium">Google & Social Optimization</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Inputs Column */}
+                            <div className="space-y-4">
+                                <div>
+                                    <label htmlFor="metaTitle" className="block text-sm font-medium text-gray-700">
+                                        Meta Title
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="metaTitle"
+                                        id="metaTitle"
+                                        value={formData.metaTitle}
+                                        onChange={handleChange}
+                                        placeholder="e.g. Luxury 6 BHK Prism Villa in Pawna | Nirwana Stays"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    />
+                                    <div className="flex justify-between items-center mt-1 text-xs">
+                                        <span className={formData.metaTitle && (formData.metaTitle.length < 50 || formData.metaTitle.length > 60) ? "text-amber-600" : "text-gray-500"}>
+                                            Recommended length: 50-60 characters
+                                        </span>
+                                        <span className={`font-medium ${formData.metaTitle && (formData.metaTitle.length >= 50 && formData.metaTitle.length <= 60) ? "text-emerald-600" : "text-gray-500"}`}>
+                                            {formData.metaTitle?.length || 0} chars
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="metaDescription" className="block text-sm font-medium text-gray-700">
+                                        Meta Description
+                                    </label>
+                                    <textarea
+                                        name="metaDescription"
+                                        id="metaDescription"
+                                        rows={4}
+                                        value={formData.metaDescription}
+                                        onChange={handleChange}
+                                        placeholder="Add a search snippet description. Summarize the room details, location, pricing, and main selling features..."
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    />
+                                    <div className="flex justify-between items-center mt-1 text-xs">
+                                        <span className={formData.metaDescription && (formData.metaDescription.length < 120 || formData.metaDescription.length > 160) ? "text-amber-600" : "text-gray-500"}>
+                                            Recommended length: 120-160 characters
+                                        </span>
+                                        <span className={`font-medium ${formData.metaDescription && (formData.metaDescription.length >= 120 && formData.metaDescription.length <= 160) ? "text-emerald-600" : "text-gray-500"}`}>
+                                            {formData.metaDescription?.length || 0} chars
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="metaKeywords" className="block text-sm font-medium text-gray-700">
+                                        Focus Keywords
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="metaKeywords"
+                                        id="metaKeywords"
+                                        value={formData.metaKeywords}
+                                        onChange={handleChange}
+                                        placeholder="e.g. pawna lake villa, prism villa lonavala, luxury stay"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Separated by commas</p>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-center">
+                                        <label htmlFor="schemaMarkup" className="block text-sm font-medium text-gray-700">
+                                            JSON-LD Schema Markup
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const defaultSchema = {
+                                                    "@context": "https://schema.org",
+                                                    "@type": "Hotel",
+                                                    "name": formData.name,
+                                                    "description": formData.metaDescription || formData.description.replace(/<[^>]*>/g, ""),
+                                                    "priceRange": `INR ${formData.price}`
+                                                };
+                                                setFormData({ ...formData, schemaMarkup: JSON.stringify(defaultSchema, null, 2) });
+                                            }}
+                                            className="text-xs text-blue-600 hover:text-blue-500 font-semibold"
+                                        >
+                                            Generate Default Schema
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        name="schemaMarkup"
+                                        id="schemaMarkup"
+                                        rows={6}
+                                        value={formData.schemaMarkup}
+                                        onChange={handleChange}
+                                        placeholder={`{
+  "@context": "https://schema.org",
+  "@type": "Hotel",
+  "name": "Prism Villa"
+}`}
+                                        className="mt-1 block w-full font-mono text-xs border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Google and Social Preview Simulator Column */}
+                            <div className="space-y-6 bg-gray-50 rounded-xl p-6 border border-gray-100">
+                                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                                    Search Engine Previews
+                                </h3>
+
+                                {/* Google Desktop Preview */}
+                                <div className="space-y-2">
+                                    <p className="text-xs font-medium text-gray-500">Google Search Result</p>
+                                    <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm space-y-1">
+                                        <div className="flex items-center space-x-1.5 text-xs text-gray-600 truncate">
+                                            <span>https://nirwanastays.com</span>
+                                            <span>›</span>
+                                            <span className="text-gray-500 font-normal">
+                                                {formData.name ? formData.name.toLowerCase().replace(/\s+/g, '-') : "accommodation"}
+                                            </span>
+                                        </div>
+                                        <h4 className="text-[#1a0dab] hover:underline text-lg font-medium leading-tight truncate">
+                                            {formData.metaTitle || formData.name || "Accommodation Title | Nirwana Stays"}
+                                        </h4>
+                                        <p className="text-[#4d5156] text-xs leading-relaxed line-clamp-2">
+                                            {formData.metaDescription || "Please provide a meta description to see how this page will appear on search results pages."}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Facebook / WhatsApp Open Graph Preview */}
+                                <div className="space-y-2">
+                                    <p className="text-xs font-medium text-gray-500">Social Media Share Preview (Open Graph)</p>
+                                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                                        <div className="aspect-video bg-gray-100 relative flex items-center justify-center text-gray-400">
+                                            {formData.images && formData.images.length > 0 ? (
+                                                <img
+                                                    src={formData.images[0]}
+                                                    alt="Cover Preview"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                    <span className="text-[10px]">No image uploaded</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="p-3 bg-gray-50 border-t border-gray-100 space-y-0.5">
+                                            <p className="text-[10px] text-gray-400 font-medium uppercase">nirwanastays.com</p>
+                                            <h5 className="text-xs font-bold text-gray-800 line-clamp-1">
+                                                {formData.metaTitle || formData.name || "Accommodation Title | Nirwana Stays"}
+                                            </h5>
+                                            <p className="text-[11px] text-gray-500 line-clamp-1.5">
+                                                {formData.metaDescription || "No description provided."}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Form Actions */}
                 <div className="flex justify-end space-x-3">
