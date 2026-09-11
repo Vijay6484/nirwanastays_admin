@@ -8,6 +8,7 @@ export type MediaFolder =
     | "hero"
     | "ratings"
     | "services"
+    | "stories"
     | "general";
 
 export interface UploadImageResult {
@@ -36,6 +37,29 @@ export async function uploadImageFile(
 
     if (!response.data?.success || !response.data?.url) {
         throw new Error("Image upload failed");
+    }
+
+    return response.data;
+}
+
+export async function uploadMediaFile(
+    file: File,
+    folder: MediaFolder = "stories",
+): Promise<UploadImageResult> {
+    const formData = new FormData();
+    formData.append("media", file);
+    formData.append("folder", folder);
+
+    const response = await axios.post<UploadImageResult>(
+        `${BASE_URL}/upload/media?folder=${folder}`,
+        formData,
+        {
+            headers: { "Content-Type": "multipart/form-data" },
+        },
+    );
+
+    if (!response.data?.success || !response.data?.url) {
+        throw new Error("Media upload failed");
     }
 
     return response.data;

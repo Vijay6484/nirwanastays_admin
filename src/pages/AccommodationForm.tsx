@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import AccommodationImageModal from "../components/accommodation/AccommodationImageModal";
 import PropertyImages from "../components/accommodation/PropertyImages";
+import PropertyStories from "../components/accommodation/PropertyStories";
 
 const admin_BASE_URL = BASE_URL;
 
@@ -45,6 +46,9 @@ interface Accommodation {
     packageImages?: string[];
     adultPrice?: number;
     childPrice?: number;
+    weekendPrice?: number;
+    weekendAdultPrice?: number;
+    weekendChildPrice?: number;
     maxGuests?: number;
 
     // Villa-specific fields
@@ -56,6 +60,8 @@ interface Accommodation {
     metaDescription?: string;
     metaKeywords?: string;
     schemaMarkup?: string;
+    canonicalUrl?: string;
+    breadcrumbs?: { label: string; url: string }[] | string;
 }
 
 interface User {
@@ -114,6 +120,9 @@ const AccommodationForm: React.FC = () => {
         packageImages: [],
         adultPrice: 0,
         childPrice: 0,
+        weekendPrice: 0,
+        weekendAdultPrice: 0,
+        weekendChildPrice: 0,
         maxGuests: 2,
 
         // Villa defaults
@@ -125,6 +134,8 @@ const AccommodationForm: React.FC = () => {
         metaDescription: "",
         metaKeywords: "",
         schemaMarkup: "",
+        canonicalUrl: "",
+        breadcrumbs: [],
     });
 
     const [users, setUsers] = useState<User[]>([]);
@@ -209,6 +220,18 @@ const AccommodationForm: React.FC = () => {
                     parseFloat(data.packages?.pricing?.adult || "0") || 0,
                 childPrice:
                     parseFloat(data.packages?.pricing?.child || "0") || 0,
+                weekendPrice:
+                    parseFloat(
+                        data.basicInfo?.weekendPrice ||
+                            data.packages?.pricing?.weekendPrice ||
+                            "0",
+                    ) || 0,
+                weekendAdultPrice:
+                    parseFloat(data.packages?.pricing?.weekendAdult || "0") ||
+                    0,
+                weekendChildPrice:
+                    parseFloat(data.packages?.pricing?.weekendChild || "0") ||
+                    0,
                 maxGuests: data.packages?.pricing?.maxGuests || 2,
 
                 // Map villa fields if present in basicInfo
@@ -220,6 +243,18 @@ const AccommodationForm: React.FC = () => {
                 metaDescription: data.basicInfo?.metaDescription || "",
                 metaKeywords: data.basicInfo?.metaKeywords || "",
                 schemaMarkup: data.basicInfo?.schemaMarkup || "",
+                canonicalUrl: data.basicInfo?.canonicalUrl || "",
+                breadcrumbs: Array.isArray(data.basicInfo?.breadcrumbs)
+                    ? data.basicInfo.breadcrumbs
+                    : typeof data.basicInfo?.breadcrumbs === "string"
+                    ? (() => {
+                          try {
+                              return JSON.parse(data.basicInfo.breadcrumbs);
+                          } catch (e) {
+                              return [];
+                          }
+                      })()
+                    : [],
             });
         } catch (error) {
             console.error("Error fetching accommodation:", error);
@@ -249,6 +284,9 @@ const AccommodationForm: React.FC = () => {
             name === "longitude" ||
             name === "adultPrice" ||
             name === "childPrice" ||
+            name === "weekendPrice" ||
+            name === "weekendAdultPrice" ||
+            name === "weekendChildPrice" ||
             name === "maxGuests" ||
             name === "maxPersonsVilla" ||
             name === "extraPersonRate"
@@ -435,6 +473,7 @@ const AccommodationForm: React.FC = () => {
                     capacity: formData.capacity,
                     rooms: formData.rooms,
                     price: formData.price,
+                    weekendPrice: formData.weekendPrice || null,
                     features: formData.features,
                     images: allImages, // Use the combined image array
                     available: formData.available,
@@ -442,6 +481,8 @@ const AccommodationForm: React.FC = () => {
                     metaDescription: formData.metaDescription,
                     metaKeywords: formData.metaKeywords,
                     schemaMarkup: formData.schemaMarkup,
+                    canonicalUrl: formData.canonicalUrl,
+                    breadcrumbs: formData.breadcrumbs,
 
                     // Villa fields inside basicInfo (if villa selected)
                     ...(formData.type === "Villa"
@@ -470,6 +511,8 @@ const AccommodationForm: React.FC = () => {
                     pricing: {
                         adult: formData.adultPrice,
                         child: formData.childPrice,
+                        weekendAdult: formData.weekendAdultPrice || null,
+                        weekendChild: formData.weekendChildPrice || null,
                         maxGuests: formData.maxGuests,
                     },
                 },
@@ -815,7 +858,9 @@ const AccommodationForm: React.FC = () => {
                                     htmlFor="price"
                                     className="block text-sm font-medium text-gray-700"
                                 >
-                                    Price per night per person (₹) *
+                                    {formData.type === "Villa"
+                                        ? "Weekday Price per night (₹) *"
+                                        : "Weekday Base Price (₹) *"}
                                 </label>
                                 <div className="mt-1">
                                     <input
@@ -837,6 +882,34 @@ const AccommodationForm: React.FC = () => {
                                             {errors.price}
                                         </p>
                                     )}
+                                </div>
+                            </div>
+
+                            <div className="sm:col-span-2">
+                                <label
+                                    htmlFor="weekendPrice"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    {formData.type === "Villa"
+                                        ? "Weekend Price per night (₹)"
+                                        : "Weekend Base Price (₹)"}
+                                </label>
+                                <div className="mt-1">
+                                    <input
+                                        type="number"
+                                        name="weekendPrice"
+                                        id="weekendPrice"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.weekendPrice}
+                                        onChange={handleChange}
+                                        placeholder="Leave same as weekday if not applicable"
+                                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Fri – Sun rates shown separately on the
+                                        booking page
+                                    </p>
                                 </div>
                             </div>
 
@@ -1234,7 +1307,7 @@ const AccommodationForm: React.FC = () => {
                                     htmlFor="adultPrice"
                                     className="block text-sm font-medium text-gray-700"
                                 >
-                                    Adult Price (₹)
+                                    Weekday Adult Price (₹)
                                 </label>
                                 <div className="mt-1">
                                     <input
@@ -1256,7 +1329,7 @@ const AccommodationForm: React.FC = () => {
                                         htmlFor="childPrice"
                                         className="block text-sm font-medium text-gray-700"
                                     >
-                                        Child Price (₹)
+                                        Weekday Child Price (₹)
                                     </label>
                                     <div className="mt-1">
                                         <input
@@ -1272,12 +1345,59 @@ const AccommodationForm: React.FC = () => {
                                     </div>
                                 </div>
                             )}
+
+                            <div className="sm:col-span-3">
+                                <label
+                                    htmlFor="weekendAdultPrice"
+                                    className="block text-sm font-medium text-gray-700"
+                                >
+                                    Weekend Adult Price (₹)
+                                </label>
+                                <div className="mt-1">
+                                    <input
+                                        type="number"
+                                        name="weekendAdultPrice"
+                                        id="weekendAdultPrice"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.weekendAdultPrice}
+                                        onChange={handleChange}
+                                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                    />
+                                </div>
+                            </div>
+
+                            {formData.type !== "Villa" && (
+                                <div className="sm:col-span-3">
+                                    <label
+                                        htmlFor="weekendChildPrice"
+                                        className="block text-sm font-medium text-gray-700"
+                                    >
+                                        Weekend Child Price (₹)
+                                    </label>
+                                    <div className="mt-1">
+                                        <input
+                                            type="number"
+                                            name="weekendChildPrice"
+                                            id="weekendChildPrice"
+                                            min="0"
+                                            step="0.01"
+                                            value={formData.weekendChildPrice}
+                                            onChange={handleChange}
+                                            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {isEditing && id ? (
-                    <PropertyImages accommodationId={Number(id)} />
+                    <>
+                        <PropertyImages accommodationId={Number(id)} />
+                        <PropertyStories accommodationId={Number(id)} />
+                    </>
                 ) : (
                     <div className="bg-white shadow rounded-lg overflow-hidden">
                         <div className="p-6 space-y-6">
@@ -1402,6 +1522,94 @@ const AccommodationForm: React.FC = () => {
                                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     />
                                     <p className="mt-1 text-xs text-gray-500">Separated by commas</p>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="canonicalUrl" className="block text-sm font-medium text-gray-700">
+                                        Canonical URL
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="canonicalUrl"
+                                        id="canonicalUrl"
+                                        value={formData.canonicalUrl || ""}
+                                        onChange={handleChange}
+                                        placeholder="e.g. nirwanastays.com/anythinghere or https://nirwanastays.com/anythinghere"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Custom canonical link tag for search engines. Defaults to standard slug URL if left empty.
+                                    </p>
+                                </div>
+
+                                <div className="border-t border-gray-200 pt-4">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="block text-sm font-medium text-gray-700">
+                                            Breadcrumbs Path
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const currentBc = Array.isArray(formData.breadcrumbs) ? [...formData.breadcrumbs] : [];
+                                                setFormData({
+                                                    ...formData,
+                                                    breadcrumbs: [...currentBc, { label: "", url: "" }]
+                                                });
+                                            }}
+                                            className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-md font-semibold hover:bg-emerald-100 transition-colors"
+                                        >
+                                            + Add Breadcrumb Level
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mb-3">
+                                        Define custom breadcrumb navigation levels (e.g. Label: "Home", URL: "https://nirwanastays.com/").
+                                    </p>
+                                    {Array.isArray(formData.breadcrumbs) && formData.breadcrumbs.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {formData.breadcrumbs.map((bc, idx) => (
+                                                <div key={idx} className="flex items-center space-x-2 bg-gray-50 p-2 rounded-md border border-gray-200">
+                                                    <span className="text-xs font-semibold text-gray-500 w-6 text-center">{idx + 1}</span>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Label (e.g. Lonavala Stays)"
+                                                        value={bc.label}
+                                                        onChange={(e) => {
+                                                            const updated = [...(formData.breadcrumbs as { label: string; url: string }[])];
+                                                            updated[idx] = { ...updated[idx], label: e.target.value };
+                                                            setFormData({ ...formData, breadcrumbs: updated });
+                                                        }}
+                                                        className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-blue-500"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="URL / Path (e.g. /lonavala)"
+                                                        value={bc.url}
+                                                        onChange={(e) => {
+                                                            const updated = [...(formData.breadcrumbs as { label: string; url: string }[])];
+                                                            updated[idx] = { ...updated[idx], url: e.target.value };
+                                                            setFormData({ ...formData, breadcrumbs: updated });
+                                                        }}
+                                                        className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-blue-500"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const updated = (formData.breadcrumbs as { label: string; url: string }[]).filter((_, i) => i !== idx);
+                                                            setFormData({ ...formData, breadcrumbs: updated });
+                                                        }}
+                                                        className="text-red-500 hover:text-red-700 p-1 text-xs font-bold"
+                                                        title="Remove Level"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs italic text-gray-400 bg-gray-50 p-3 rounded-md border border-dashed border-gray-300 text-center">
+                                            No custom breadcrumbs added. Default hierarchy will be used (Home &gt; City &gt; Accommodation).
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
