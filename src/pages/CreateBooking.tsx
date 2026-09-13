@@ -18,7 +18,9 @@ interface Accommodation {
     id: number;
     name: string;
     description: string;
+    type?: string;
     price: number;
+    weekendPrice?: number;
     available_rooms: number;
     amenities: string;
     address: string;
@@ -26,6 +28,10 @@ interface Accommodation {
     longitude: number;
     adultPrice?: number;
     childPrice?: number;
+    weekendAdultPrice?: number;
+    weekendChildPrice?: number;
+    extraAdultRate?: number;
+    maxPersonsIncluded?: number;
     capacity: number;
 }
 
@@ -210,7 +216,9 @@ const CreateBooking: React.FC = () => {
                 id: data.id,
                 name: data.basicInfo?.name || "Unnamed Accommodation",
                 description: data.basicInfo?.description || "",
+                type: data.basicInfo?.type || "",
                 price: data.basicInfo?.price || 0,
+                weekendPrice: data.basicInfo?.weekendPrice || 0,
                 available_rooms: data.basicInfo?.rooms || 0,
                 amenities: data.amenities || "",
                 address: data.location?.address || "",
@@ -218,6 +226,14 @@ const CreateBooking: React.FC = () => {
                 longitude: data.location?.coordinates?.longitude || 0,
                 adultPrice: data.packages?.pricing?.adult || 0,
                 childPrice: data.packages?.pricing?.child || 0,
+                weekendAdultPrice: data.packages?.pricing?.weekendAdult || 0,
+                weekendChildPrice: data.packages?.pricing?.weekendChild || 0,
+                extraAdultRate: data.basicInfo?.RatePersonVilla || 0,
+                maxPersonsIncluded:
+                    data.basicInfo?.MaxPersonVilla ||
+                    data.packages?.pricing?.maxGuests ||
+                    data.basicInfo?.capacity ||
+                    2,
                 capacity: data.basicInfo?.capacity || 4,
             };
             setSelectedAccommodation(accommodation);
@@ -613,10 +629,10 @@ const CreateBooking: React.FC = () => {
 
         const adults = parseInt(formData.adults) || 0;
         const children = parseInt(formData.children) || 0;
-
-        // Check for special pricing from blocked dates for the check-in date
-        let adultPricePerPerson = selectedAccommodation.adultPrice || 0;
-        let childPricePerPerson = selectedAccommodation.childPrice || 0;
+        const rooms = parseInt(formData.rooms) || 0;
+        const propertyType = String(selectedAccommodation.type || "").toLowerCase();
+        const isCottage = propertyType === "cottage";
+        const isVilla = propertyType === "villa";
 
         const stayDates = selectedDates.length
             ? selectedDates.map((date) => format(date, "yyyy-MM-dd"))
@@ -624,30 +640,102 @@ const CreateBooking: React.FC = () => {
               ? [formData.check_in]
               : [];
 
+        const isWeekendDateKey = (dateKey: string) => {
+            const day = new Date(`${dateKey}T12:00:00`).getDay();
+            return day === 0 || day === 5 || day === 6;
+        };
+
         let baseTotal = 0;
         stayDates.forEach((dateKey) => {
-            let nightAdult = adultPricePerPerson;
-            let nightChild = childPricePerPerson;
-            if (formData.accommodation_id) {
-                const accommodationId = parseInt(formData.accommodation_id);
-                const blockedForDate = blockedDates.find(
-                    (b) =>
-                        b.accommodation_id === accommodationId &&
-                        b.blocked_date === dateKey,
-                );
-                if (blockedForDate) {
-                    if (
-                        blockedForDate.adult_price !== null &&
-                        blockedForDate.adult_price !== undefined
-                    ) {
-                        nightAdult = blockedForDate.adult_price;
-                    }
-                    if (
-                        blockedForDate.child_price !== null &&
-                        blockedForDate.child_price !== undefined
-                    ) {
-                        nightChild = blockedForDate.child_price;
-                    }
+            const weekend = isWeekendDateKey(dateKey);
+            const accommodationId = formData.accommodation_id
+                ? parseInt(formData.accommodation_id)
+                : 0;
+            const blockedForDate = blockedDates.find(
+                (b) =>
+                    b.accommodation_id === accommodationId &&
+                    b.blocked_date === dateKey,
+            );
+
+            if (isCottage || isVilla) {
+                const defaultRoomRate = weekend
+                    ? selectedAccommodation.weekendPrice ||
+                      selectedAccommodation.price ||
+                      0
+                    : selectedAccommodation.price || 0;
+                const roomRate =
+                    blockedForDate?.adult_price !== null &&
+                    blockedForDate?.adult_price !== undefined
+                        ? Number(blockedForDate.adult_price)
+                        : defaultRoomRate;
+
+                if (isVilla) {
+                    const included =
+                        selectedAccommodation.maxPersonsIncluded ||
+                        selectedAccommodation.capacity ||
+                        2;
+                    const extraGuests = Math.max(
+                        0,
+                        adults + children - included,
+                    );
+                    const extraRate =
+                        selectedAccommodation.extraAdultRate || 0;
+                    baseTotal += roomRate + extraGuests * extraRate;
+                    return;
+                }
+
+                const includedPerRoom =
+                    selectedAccommodation.maxPersonsIncluded ||
+                    selectedAccommodation.capacity ||
+                    2;
+                const includedTotal = includedPerRoom * Math.max(1, rooms);
+                const extraAdults = Math.max(0, adults - includedTotal);
+                const remaining = Math.max(0, includedTotal - adults);
+                const extraChildren = Math.max(0, children - remaining);
+                const extraAdultRate = weekend
+                    ? selectedAccommodation.weekendAdultPrice ||
+                      selectedAccommodation.extraAdultRate ||
+                      0
+                    : selectedAccommodation.extraAdultRate || 0;
+                const extraChildRate =
+                    blockedForDate?.child_price !== null &&
+                    blockedForDate?.child_price !== undefined
+                        ? Number(blockedForDate.child_price)
+                        : weekend
+                          ? selectedAccommodation.weekendChildPrice ||
+                            selectedAccommodation.childPrice ||
+                            0
+                          : selectedAccommodation.childPrice || 0;
+
+                baseTotal +=
+                    rooms * roomRate +
+                    extraAdults * extraAdultRate +
+                    extraChildren * extraChildRate;
+                return;
+            }
+
+            let nightAdult = weekend
+                ? selectedAccommodation.weekendAdultPrice ||
+                  selectedAccommodation.adultPrice ||
+                  0
+                : selectedAccommodation.adultPrice || 0;
+            let nightChild = weekend
+                ? selectedAccommodation.weekendChildPrice ||
+                  selectedAccommodation.childPrice ||
+                  0
+                : selectedAccommodation.childPrice || 0;
+            if (blockedForDate) {
+                if (
+                    blockedForDate.adult_price !== null &&
+                    blockedForDate.adult_price !== undefined
+                ) {
+                    nightAdult = blockedForDate.adult_price;
+                }
+                if (
+                    blockedForDate.child_price !== null &&
+                    blockedForDate.child_price !== undefined
+                ) {
+                    nightChild = blockedForDate.child_price;
                 }
             }
             baseTotal += nightAdult * adults + nightChild * children;
@@ -1780,6 +1868,17 @@ const CreateBooking: React.FC = () => {
                                         {parseInt(formData.rooms) *
                                             selectedAccommodation.capacity}
                                     </div>
+                                    {String(
+                                        selectedAccommodation.type || "",
+                                    ).toLowerCase() === "cottage" && (
+                                        <div className="text-sm text-gray-600 mt-1">
+                                            Cottage pricing is per room. Extra
+                                            adult/child charges apply after{" "}
+                                            {selectedAccommodation.maxPersonsIncluded ||
+                                                selectedAccommodation.capacity}{" "}
+                                            included guests per room.
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

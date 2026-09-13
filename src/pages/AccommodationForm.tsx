@@ -234,9 +234,17 @@ const AccommodationForm: React.FC = () => {
                     0,
                 maxGuests: data.packages?.pricing?.maxGuests || 2,
 
-                // Map villa fields if present in basicInfo
-                maxPersonsVilla: data.basicInfo?.maxPersonsVilla || 0,
-                extraPersonRate: data.basicInfo?.extraPersonRate || 0,
+                // Map villa/cottage extra-guest fields if present in basicInfo
+                maxPersonsVilla:
+                    data.basicInfo?.MaxPersonVilla ||
+                    data.basicInfo?.maxPersonsVilla ||
+                    data.packages?.pricing?.maxGuests ||
+                    0,
+                extraPersonRate:
+                    data.basicInfo?.RatePersonVilla ||
+                    data.basicInfo?.extraPersonRate ||
+                    parseFloat(data.packages?.pricing?.adult || "0") ||
+                    0,
 
                 // Map SEO fields
                 metaTitle: data.basicInfo?.metaTitle || "",
@@ -426,8 +434,8 @@ const AccommodationForm: React.FC = () => {
             newErrors.packageDescription = "Package description is required";
         }
 
-        // Villa-specific validation (only if type === 'Villa')
-        if (formData.type === "Villa") {
+        // Villa/cottage included-guest validation
+        if (formData.type === "Villa" || formData.type === "Cottage") {
             if (!formData.maxPersonsVilla || formData.maxPersonsVilla <= 0) {
                 newErrors.maxPersonsVilla =
                     "Maximum persons must be greater than 0";
@@ -484,8 +492,8 @@ const AccommodationForm: React.FC = () => {
                     canonicalUrl: formData.canonicalUrl,
                     breadcrumbs: formData.breadcrumbs,
 
-                    // Villa fields inside basicInfo (if villa selected)
-                    ...(formData.type === "Villa"
+                    // Villa/cottage extra-guest fields
+                    ...(formData.type === "Villa" || formData.type === "Cottage"
                         ? {
                               MaxPersonVilla: formData.maxPersonsVilla,
                               RatePersonVilla: formData.extraPersonRate,
@@ -509,7 +517,11 @@ const AccommodationForm: React.FC = () => {
                     description: formData.packageDescription,
                     images: formData.packageImages || [],
                     pricing: {
-                        adult: formData.adultPrice,
+                        adult:
+                            formData.type === "Cottage"
+                                ? formData.extraPersonRate ||
+                                  formData.adultPrice
+                                : formData.adultPrice,
                         child: formData.childPrice,
                         weekendAdult: formData.weekendAdultPrice || null,
                         weekendChild: formData.weekendChildPrice || null,
@@ -860,7 +872,9 @@ const AccommodationForm: React.FC = () => {
                                 >
                                     {formData.type === "Villa"
                                         ? "Weekday Price per night (₹) *"
-                                        : "Weekday Base Price (₹) *"}
+                                        : formData.type === "Cottage"
+                                          ? "Weekday Price per room (₹) *"
+                                          : "Weekday Base Price (₹) *"}
                                 </label>
                                 <div className="mt-1">
                                     <input
@@ -892,7 +906,9 @@ const AccommodationForm: React.FC = () => {
                                 >
                                     {formData.type === "Villa"
                                         ? "Weekend Price per night (₹)"
-                                        : "Weekend Base Price (₹)"}
+                                        : formData.type === "Cottage"
+                                          ? "Weekend Price per room (₹)"
+                                          : "Weekend Base Price (₹)"}
                                 </label>
                                 <div className="mt-1">
                                     <input
@@ -932,15 +948,18 @@ const AccommodationForm: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Villa-specific inputs (shown only when type === 'Villa') */}
-                            {formData.type === "Villa" && (
+                            {/* Villa/cottage included guests and extra adult rate */}
+                            {(formData.type === "Villa" ||
+                                formData.type === "Cottage") && (
                                 <>
                                     <div className="sm:col-span-2">
                                         <label
                                             htmlFor="maxPersonsVilla"
                                             className="block text-sm font-medium text-gray-700"
                                         >
-                                            Maximum Persons (Allowed)
+                                            {formData.type === "Cottage"
+                                                ? "Included Guests per Room"
+                                                : "Maximum Persons (Allowed)"}
                                         </label>
                                         <div className="mt-1">
                                             <input
@@ -965,7 +984,9 @@ const AccommodationForm: React.FC = () => {
                                             htmlFor="extraPersonRate"
                                             className="block text-sm font-medium text-gray-700"
                                         >
-                                            Extra Person Rate (₹ per night)
+                                            {formData.type === "Cottage"
+                                                ? "Extra Adult Rate (₹ per night)"
+                                                : "Extra Person Rate (₹ per night)"}
                                         </label>
                                         <div className="mt-1">
                                             <input
@@ -1302,26 +1323,28 @@ const AccommodationForm: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="sm:col-span-3">
-                                <label
-                                    htmlFor="adultPrice"
-                                    className="block text-sm font-medium text-gray-700"
-                                >
-                                    Weekday Adult Price (₹)
-                                </label>
-                                <div className="mt-1">
-                                    <input
-                                        type="number"
-                                        name="adultPrice"
-                                        id="adultPrice"
-                                        min="0"
-                                        step="0.01"
-                                        value={formData.adultPrice}
-                                        onChange={handleChange}
-                                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                                    />
+                            {formData.type !== "Cottage" && (
+                                <div className="sm:col-span-3">
+                                    <label
+                                        htmlFor="adultPrice"
+                                        className="block text-sm font-medium text-gray-700"
+                                    >
+                                        Weekday Adult Price (₹)
+                                    </label>
+                                    <div className="mt-1">
+                                        <input
+                                            type="number"
+                                            name="adultPrice"
+                                            id="adultPrice"
+                                            min="0"
+                                            step="0.01"
+                                            value={formData.adultPrice}
+                                            onChange={handleChange}
+                                            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {formData.type !== "Villa" && (
                                 <div className="sm:col-span-3">
@@ -1329,7 +1352,9 @@ const AccommodationForm: React.FC = () => {
                                         htmlFor="childPrice"
                                         className="block text-sm font-medium text-gray-700"
                                     >
-                                        Weekday Child Price (₹)
+                                        {formData.type === "Cottage"
+                                            ? "Extra Child Price (₹ per night)"
+                                            : "Weekday Child Price (₹)"}
                                     </label>
                                     <div className="mt-1">
                                         <input
@@ -1351,7 +1376,9 @@ const AccommodationForm: React.FC = () => {
                                     htmlFor="weekendAdultPrice"
                                     className="block text-sm font-medium text-gray-700"
                                 >
-                                    Weekend Adult Price (₹)
+                                    {formData.type === "Cottage"
+                                        ? "Extra Weekend Adult Price (₹ per night)"
+                                        : "Weekend Adult Price (₹)"}
                                 </label>
                                 <div className="mt-1">
                                     <input
@@ -1373,7 +1400,9 @@ const AccommodationForm: React.FC = () => {
                                         htmlFor="weekendChildPrice"
                                         className="block text-sm font-medium text-gray-700"
                                     >
-                                        Weekend Child Price (₹)
+                                        {formData.type === "Cottage"
+                                            ? "Extra Weekend Child Price (₹ per night)"
+                                            : "Weekend Child Price (₹)"}
                                     </label>
                                     <div className="mt-1">
                                         <input
