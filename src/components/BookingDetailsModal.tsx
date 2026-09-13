@@ -169,6 +169,28 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ booking, onCl
                         <p className="text-xs text-gray-500">Check Out</p>
                         <p className="text-sm font-medium text-gray-900">{formatDate(booking.checkOut)}</p>
                       </div>
+                      {(() => {
+                        const raw = booking.rawData?.selected_dates;
+                        let dates: string[] = [];
+                        if (Array.isArray(raw)) dates = raw;
+                        else if (typeof raw === 'string' && raw.trim()) {
+                          try {
+                            const parsed = JSON.parse(raw);
+                            dates = Array.isArray(parsed) ? parsed : raw.split(',');
+                          } catch {
+                            dates = raw.split(',');
+                          }
+                        }
+                        if (dates.length < 2) return null;
+                        return (
+                          <div className="col-span-2">
+                            <p className="text-xs text-gray-500">Stay nights</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {dates.join(', ')}
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 

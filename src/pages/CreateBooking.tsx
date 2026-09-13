@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { addDays, format } from "date-fns";
 import { BASE_URL } from "../config/config";
+import MultiDatePicker from "../components/MultiDatePicker";
 
 interface Accommodation {
     id: number;
@@ -66,6 +68,7 @@ const CreateBooking: React.FC = () => {
     const [showRoomAvailability, setShowRoomAvailability] = useState(false);
     const [blockedRoomsCount, setBlockedRoomsCount] = useState<number>(0);
     const [couponError, setCouponError] = useState<string>("");
+    const [selectedDates, setSelectedDates] = useState<Date[]>([]);
     const [formData, setFormData] = useState({
         guest_name: "",
         guest_email: "",
@@ -246,6 +249,54 @@ const CreateBooking: React.FC = () => {
         }
     };
 
+    const fetchMultiDateAvailability = async (
+        accommodationId: number,
+        dates: string[],
+    ) => {
+        try {
+            const response = await fetch(
+                `${BASE_URL}/admin/bookings/multi-date-availability?dates=${dates.join(",")}&id=${accommodationId}`,
+            );
+            if (!response.ok) return null;
+            return response.json();
+        } catch (error) {
+            console.error("Error fetching multi-date availability:", error);
+            return null;
+        }
+    };
+
+    const handleStayDatesChange = (dates: Date[]) => {
+        const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+        setSelectedDates(sorted);
+        setFormData((prev) => ({
+            ...prev,
+            check_in: sorted[0] ? format(sorted[0], "yyyy-MM-dd") : "",
+            check_out: sorted.length
+                ? format(addDays(sorted[sorted.length - 1], 1), "yyyy-MM-dd")
+                : "",
+        }));
+    };
+
+    const getBlockedRoomsForDate = (
+        dateString: string,
+        accommodationId: number,
+    ) => {
+        const blockedForDate = blockedDates.find(
+            (b) =>
+                b.accommodation_id === accommodationId &&
+                b.blocked_date === dateString,
+        );
+        if (!blockedForDate) return 0;
+
+        const roomsValue =
+            blockedForDate.rooms_blocked !== undefined &&
+            blockedForDate.rooms_blocked !== null
+                ? blockedForDate.rooms_blocked
+                : blockedForDate.rooms;
+        if (roomsValue === null || roomsValue === undefined) return 0;
+        return Number(roomsValue) || 0;
+    };
+
     const handleChange = (
         e: React.ChangeEvent<
             HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -361,22 +412,16 @@ const CreateBooking: React.FC = () => {
     };
 
     useEffect(() => {
-        if (formData.check_in) {
-            const nextDay = new Date(formData.check_in);
-            nextDay.setDate(nextDay.getDate() + 1);
-            const nextDayString = nextDay.toISOString().split("T")[0];
-
-            if (
-                !formData.check_out ||
-                new Date(formData.check_out) <= new Date(formData.check_in)
-            ) {
-                setFormData((prev) => ({ ...prev, check_out: nextDayString }));
-            }
-
-            validateDates(formData.check_in, nextDayString);
+        if (selectedDates.length && formData.accommodation_id) {
+            validateDates(
+                format(selectedDates[0], "yyyy-MM-dd"),
+                format(addDays(selectedDates[selectedDates.length - 1], 1), "yyyy-MM-dd"),
+            );
+        } else {
+            setDateError(null);
         }
     }, [
-        formData.check_in,
+        selectedDates,
         formData.accommodation_id,
         selectedAccommodation,
         blockedDates,
@@ -386,7 +431,7 @@ const CreateBooking: React.FC = () => {
         const calculateAvailableRooms = async () => {
             if (
                 !formData.accommodation_id ||
-                !formData.check_in ||
+                !selectedDates.length ||
                 !selectedAccommodation
             ) {
                 setAvailableRooms(0);
@@ -395,67 +440,80 @@ const CreateBooking: React.FC = () => {
             }
 
             const accommodationId = parseInt(formData.accommodation_id);
-            const totalRooms = selectedAccommodation.available_rooms || 0;
-            const booked = await fetchBookedRooms(
+            const dateKeys = selectedDates.map((date) =>
+                format(date, "yyyy-MM-dd"),
+            );
+            const multi = await fetchMultiDateAvailability(
                 accommodationId,
-                formData.check_in,
+                dateKeys,
             );
 
-            setBookedRooms(booked);
+            if (multi?.success && Array.isArray(multi.dates)) {
+                const availableRoomsValue = Math.max(
+                    0,
+                    multi.min_available_rooms || 0,
+                );
+                setAvailableRooms(availableRoomsValue);
+                setBookedRooms(
+                    Math.max(
+                        ...multi.dates.map(
+                            (item: { booked_rooms?: number }) =>
+                                item.booked_rooms || 0,
+                        ),
+                        0,
+                    ),
+                );
+                setBlockedRoomsCount(
+                    Math.max(
+                        ...multi.dates.map(
+                            (item: { additional_rooms?: number }) =>
+                                item.additional_rooms
+                                    ? Math.abs(item.additional_rooms)
+                                    : 0,
+                        ),
+                        0,
+                    ),
+                );
+                setShowRoomAvailability(true);
 
-            const blockedForDate = blockedDates.find(
-                (b) =>
-                    b.accommodation_id === accommodationId &&
-                    b.blocked_date === formData.check_in,
-            );
-            // Handle blocked rooms - check both rooms_blocked and rooms fields
-            // If rooms_blocked or rooms is null, it means all rooms are blocked
-            // Negative values in 'rooms' field mean rooms are blocked (e.g., -3 means 3 rooms blocked)
-            // Positive values mean rooms are released/added back (so they're not blocked)
-            let blockedRooms = 0;
-            if (blockedForDate) {
-                // Check if all rooms are blocked (null means all rooms blocked)
-                if (
-                    blockedForDate.rooms_blocked === null ||
-                    blockedForDate.rooms === null
-                ) {
-                    // All rooms are blocked
-                    blockedRooms = totalRooms;
-                } else {
-                    // Use rooms_blocked if available, otherwise use rooms
-                    // The 'rooms' field can be negative (blocked) or positive (released)
-                    const roomsValue =
-                        blockedForDate.rooms_blocked !== undefined &&
-                        blockedForDate.rooms_blocked !== null
-                            ? blockedForDate.rooms_blocked
-                            : blockedForDate.rooms !== undefined &&
-                                blockedForDate.rooms !== null
-                              ? blockedForDate.rooms
-                              : 0;
-
-                    const roomsNum = Number(roomsValue) || 0;
-                    // If negative, it means rooms are blocked (convert to positive for blocked count)
-                    // If positive or zero, it means rooms are released or no blocking (so no additional blocking)
-                    blockedRooms = roomsNum < 0 ? Math.abs(roomsNum) : 0;
+                if (parseInt(formData.rooms) > availableRoomsValue) {
+                    setFormData((prev) => ({
+                        ...prev,
+                        rooms:
+                            availableRoomsValue > 0
+                                ? availableRoomsValue.toString()
+                                : "0",
+                    }));
                 }
+                return;
             }
-            setBlockedRoomsCount(blockedRooms);
 
-            const bookedCount = booked || 0;
-            const blockedCount = blockedRooms || 0;
+            const totalRooms = selectedAccommodation.available_rooms || 0;
+            let minAvailable = totalRooms;
+            let maxBooked = 0;
+            let maxBlocked = 0;
 
-            const available = totalRooms - bookedCount - blockedCount;
-            const availableRoomsValue = Math.max(available, 0);
-            setAvailableRooms(availableRoomsValue);
+            for (const dateKey of dateKeys) {
+                const booked = await fetchBookedRooms(accommodationId, dateKey);
+                const adjustment = getBlockedRoomsForDate(
+                    dateKey,
+                    accommodationId,
+                );
+                const available = Math.max(0, totalRooms + adjustment - booked);
+                minAvailable = Math.min(minAvailable, available);
+                maxBooked = Math.max(maxBooked, booked);
+                maxBlocked = Math.max(maxBlocked, Math.abs(adjustment));
+            }
+
+            setBookedRooms(maxBooked);
+            setBlockedRoomsCount(maxBlocked);
+            setAvailableRooms(minAvailable);
             setShowRoomAvailability(true);
 
-            if (parseInt(formData.rooms) > availableRoomsValue) {
+            if (parseInt(formData.rooms) > minAvailable) {
                 setFormData((prev) => ({
                     ...prev,
-                    rooms:
-                        availableRoomsValue > 0
-                            ? availableRoomsValue.toString()
-                            : "0",
+                    rooms: minAvailable > 0 ? minAvailable.toString() : "0",
                 }));
             }
         };
@@ -463,7 +521,7 @@ const CreateBooking: React.FC = () => {
         calculateAvailableRooms();
     }, [
         formData.accommodation_id,
-        formData.check_in,
+        selectedDates,
         blockedDates,
         selectedAccommodation,
     ]);
@@ -471,11 +529,13 @@ const CreateBooking: React.FC = () => {
     const validateDates = (checkIn: string, checkOut: string) => {
         if (!checkIn || !checkOut) return;
 
-        const startDate = new Date(checkIn);
-        const endDate = new Date(checkOut);
         const accommodationId = parseInt(formData.accommodation_id);
 
         if (!accommodationId || !selectedAccommodation) return;
+
+        const datesToCheck = selectedDates.length
+            ? selectedDates.map((date) => format(date, "yyyy-MM-dd"))
+            : [checkIn];
 
         const accommodationBlockedDates = blockedDates.filter(
             (date) => date.accommodation_id === accommodationId,
@@ -484,27 +544,18 @@ const CreateBooking: React.FC = () => {
         const totalRooms = selectedAccommodation.available_rooms || 0;
 
         let errorDate: string | null = null;
-        for (
-            let d = new Date(startDate);
-            d < endDate;
-            d.setDate(d.getDate() + 1)
-        ) {
-            const dateString = d.toISOString().split("T")[0];
-
+        for (const dateString of datesToCheck) {
             const blockedForDate = accommodationBlockedDates.find(
                 (blocked) => blocked.blocked_date === dateString,
             );
 
             if (blockedForDate) {
-                // Check if date is fully blocked
-                // A date is fully blocked if:
-                // 1. rooms_blocked is null (all rooms blocked)
-                // 2. rooms is null (all rooms blocked - from Calendar interface)
-                // 3. rooms_blocked equals total rooms
+                const roomsValue =
+                    blockedForDate.rooms_blocked ?? blockedForDate.rooms ?? 0;
                 const isFullyBlocked =
-                    blockedForDate.rooms_blocked === null ||
-                    blockedForDate.rooms === null ||
+                    Number(roomsValue) + totalRooms <= 0 ||
                     (blockedForDate.rooms_blocked !== null &&
+                        blockedForDate.rooms_blocked !== undefined &&
                         blockedForDate.rooms_blocked >= totalRooms);
 
                 if (isFullyBlocked) {
@@ -567,34 +618,40 @@ const CreateBooking: React.FC = () => {
         let adultPricePerPerson = selectedAccommodation.adultPrice || 0;
         let childPricePerPerson = selectedAccommodation.childPrice || 0;
 
-        if (formData.check_in && formData.accommodation_id) {
-            const accommodationId = parseInt(formData.accommodation_id);
-            const blockedForDate = blockedDates.find(
-                (b) =>
-                    b.accommodation_id === accommodationId &&
-                    b.blocked_date === formData.check_in,
-            );
+        const stayDates = selectedDates.length
+            ? selectedDates.map((date) => format(date, "yyyy-MM-dd"))
+            : formData.check_in
+              ? [formData.check_in]
+              : [];
 
-            // Use special pricing if available, otherwise use base pricing
-            if (blockedForDate) {
-                if (
-                    blockedForDate.adult_price !== null &&
-                    blockedForDate.adult_price !== undefined
-                ) {
-                    adultPricePerPerson = blockedForDate.adult_price;
-                }
-                if (
-                    blockedForDate.child_price !== null &&
-                    blockedForDate.child_price !== undefined
-                ) {
-                    childPricePerPerson = blockedForDate.child_price;
+        let baseTotal = 0;
+        stayDates.forEach((dateKey) => {
+            let nightAdult = adultPricePerPerson;
+            let nightChild = childPricePerPerson;
+            if (formData.accommodation_id) {
+                const accommodationId = parseInt(formData.accommodation_id);
+                const blockedForDate = blockedDates.find(
+                    (b) =>
+                        b.accommodation_id === accommodationId &&
+                        b.blocked_date === dateKey,
+                );
+                if (blockedForDate) {
+                    if (
+                        blockedForDate.adult_price !== null &&
+                        blockedForDate.adult_price !== undefined
+                    ) {
+                        nightAdult = blockedForDate.adult_price;
+                    }
+                    if (
+                        blockedForDate.child_price !== null &&
+                        blockedForDate.child_price !== undefined
+                    ) {
+                        nightChild = blockedForDate.child_price;
+                    }
                 }
             }
-        }
-
-        const adultPrice = adultPricePerPerson * adults;
-        const childPrice = childPricePerPerson * children;
-        const baseTotal = adultPrice + childPrice;
+            baseTotal += nightAdult * adults + nightChild * children;
+        });
 
         const discountedTotal = calculateDiscount(baseTotal, appliedCoupon);
 
@@ -610,6 +667,7 @@ const CreateBooking: React.FC = () => {
         formData.rooms,
         formData.check_in,
         formData.accommodation_id,
+        selectedDates,
         blockedDates,
         appliedCoupon,
     ]);
@@ -1319,6 +1377,7 @@ const CreateBooking: React.FC = () => {
             !formData.accommodation_id ||
             !formData.check_in ||
             !formData.check_out ||
+            !selectedDates.length ||
             !formData.total_amount
         ) {
             alert("Please fill in all required fields");
@@ -1382,6 +1441,9 @@ const CreateBooking: React.FC = () => {
                 accommodation_id: parseInt(formData.accommodation_id),
                 check_in: formData.check_in,
                 check_out: formData.check_out,
+                selected_dates: selectedDates.map((date) =>
+                    format(date, "yyyy-MM-dd"),
+                ),
                 adults,
                 children,
                 rooms,
@@ -1601,41 +1663,18 @@ const CreateBooking: React.FC = () => {
                                 </select>
                             </div>
 
-                            <div>
-                                <label
-                                    htmlFor="check_in"
-                                    className="block text-sm font-medium text-gray-700"
-                                >
-                                    Check In Date *
-                                </label>
-                                <input
-                                    type="date"
-                                    id="check_in"
-                                    name="check_in"
-                                    value={formData.check_in}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label
-                                    htmlFor="check_out"
-                                    className="block text-sm font-medium text-gray-700"
-                                >
-                                    Check Out Date *
-                                </label>
-                                <input
-                                    type="date"
-                                    id="check_out"
-                                    name="check_out"
-                                    value={formData.check_out}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
-                                    required
-                                />
-                            </div>
+                            <MultiDatePicker
+                                selectedDates={selectedDates}
+                                onChange={handleStayDatesChange}
+                            />
+                            {formData.check_in && formData.check_out && (
+                                <div className="sm:col-span-2 text-sm text-gray-600">
+                                    Check-in {formData.check_in} at 3:00 PM ·
+                                    Check-out {formData.check_out} at 11:00 AM
+                                    · {selectedDates.length} night
+                                    {selectedDates.length === 1 ? "" : "s"}
+                                </div>
+                            )}
 
                             {dateError && (
                                 <div className="sm:col-span-2">
@@ -1710,17 +1749,17 @@ const CreateBooking: React.FC = () => {
                                         availableRooms <= 0 ? (
                                             <span className="text-red-600 font-medium">
                                                 All rooms booked for the
-                                                selected date
+                                                selected dates
                                             </span>
                                         ) : (
-                                            `${availableRooms} room(s) available (Total: ${
+                                            `${availableRooms} room(s) available across selected dates (Total: ${
                                                 selectedAccommodation?.available_rooms ||
                                                 0
-                                            }, Booked: ${bookedRooms}, Blocked: ${blockedRoomsCount})`
+                                            }, Peak booked: ${bookedRooms}, Peak blocked: ${blockedRoomsCount})`
                                         )
                                     ) : formData.accommodation_id &&
-                                      !formData.check_in ? (
-                                        "Select a date to see availability"
+                                      !selectedDates.length ? (
+                                        "Select dates to see availability"
                                     ) : null}
                                 </div>
                             </div>

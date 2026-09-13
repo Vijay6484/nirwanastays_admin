@@ -22,6 +22,7 @@ interface ApiBooking {
   accommodation_name: string | null;
   check_in: string;
   check_out: string;
+  selected_dates?: string | string[] | null;
   adults: number;
   children: number;
   rooms: number;
