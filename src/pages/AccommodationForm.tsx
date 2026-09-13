@@ -299,9 +299,14 @@ const AccommodationForm: React.FC = () => {
             name === "maxPersonsVilla" ||
             name === "extraPersonRate"
         ) {
+            const parsed = value === "" ? 0 : Number(value);
             setFormData({
                 ...formData,
-                [name]: value === "" ? 0 : Number(value),
+                [name]: parsed,
+                ...(name === "capacity" &&
+                (formData.type === "Cottage" || formData.type === "Villa")
+                    ? { maxGuests: parsed }
+                    : {}),
             });
         } else if (name === "ownerId" || name === "cityId") {
             setFormData({
@@ -531,7 +536,11 @@ const AccommodationForm: React.FC = () => {
                         child: formData.childPrice,
                         weekendAdult: formData.weekendAdultPrice || null,
                         weekendChild: formData.weekendChildPrice || null,
-                        maxGuests: formData.maxGuests,
+                        maxGuests:
+                            formData.type === "Cottage" ||
+                            formData.type === "Villa"
+                                ? formData.capacity
+                                : formData.maxGuests,
                     },
                 },
             };
@@ -1292,25 +1301,28 @@ const AccommodationForm: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="sm:col-span-3">
-                                <label
-                                    htmlFor="maxGuests"
-                                    className="block text-sm font-medium text-gray-700"
-                                >
-                                    No. of Guests
-                                </label>
-                                <div className="mt-1">
-                                    <input
-                                        type="number"
-                                        name="maxGuests"
-                                        id="maxGuests"
-                                        min="1"
-                                        value={formData.maxGuests}
-                                        onChange={handleChange}
-                                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                                    />
+                            {formData.type !== "Cottage" &&
+                                formData.type !== "Villa" && (
+                                <div className="sm:col-span-3">
+                                    <label
+                                        htmlFor="maxGuests"
+                                        className="block text-sm font-medium text-gray-700"
+                                    >
+                                        No. of Guests
+                                    </label>
+                                    <div className="mt-1">
+                                        <input
+                                            type="number"
+                                            name="maxGuests"
+                                            id="maxGuests"
+                                            min="1"
+                                            value={formData.maxGuests}
+                                            onChange={handleChange}
+                                            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div className="sm:col-span-6">
                                 <label

@@ -236,7 +236,7 @@ const CreateBooking: React.FC = () => {
                         2,
                     data.basicInfo?.capacity || 2,
                 ),
-                capacity: data.basicInfo?.capacity || 4,
+                capacity: data.basicInfo?.capacity || 2,
             };
             setSelectedAccommodation(accommodation);
             setAvailableRooms(0);
@@ -315,6 +315,11 @@ const CreateBooking: React.FC = () => {
         return Number(roomsValue) || 0;
     };
 
+    const guestCapForStay = selectedAccommodation
+        ? Math.max(1, selectedAccommodation.capacity || 2) *
+          Math.max(1, parseInt(formData.rooms) || 1)
+        : undefined;
+
     const handleChange = (
         e: React.ChangeEvent<
             HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -327,6 +332,48 @@ const CreateBooking: React.FC = () => {
                 setCouponError("");
             }
         }
+
+        if (
+            selectedAccommodation &&
+            (name === "adults" || name === "children" || name === "rooms")
+        ) {
+            const nextRooms =
+                name === "rooms"
+                    ? Math.max(1, parseInt(value) || 1)
+                    : Math.max(1, parseInt(formData.rooms) || 1);
+            const cap =
+                Math.max(1, selectedAccommodation.capacity || 2) * nextRooms;
+            let adults =
+                name === "adults"
+                    ? Math.max(1, parseInt(value) || 1)
+                    : Math.max(1, parseInt(formData.adults) || 1);
+            let children =
+                name === "children"
+                    ? Math.max(0, parseInt(value) || 0)
+                    : Math.max(0, parseInt(formData.children) || 0);
+
+            if (adults + children > cap) {
+                if (name === "children") {
+                    children = Math.max(0, cap - adults);
+                } else if (name === "adults") {
+                    adults = Math.max(1, cap - children);
+                } else {
+                    const overflow = adults + children - cap;
+                    const cutChildren = Math.min(children, overflow);
+                    children -= cutChildren;
+                    adults = Math.max(1, adults - (overflow - cutChildren));
+                }
+            }
+
+            setFormData((prev) => ({
+                ...prev,
+                rooms: String(nextRooms),
+                adults: String(adults),
+                children: String(children),
+            }));
+            return;
+        }
+
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
@@ -1786,6 +1833,7 @@ const CreateBooking: React.FC = () => {
                                     id="adults"
                                     name="adults"
                                     min="1"
+                                    max={guestCapForStay}
                                     value={formData.adults}
                                     onChange={handleChange}
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
@@ -1805,6 +1853,7 @@ const CreateBooking: React.FC = () => {
                                     id="children"
                                     name="children"
                                     min="0"
+                                    max={guestCapForStay}
                                     value={formData.children}
                                     onChange={handleChange}
                                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-navy-500 focus:border-navy-500 sm:text-sm"
