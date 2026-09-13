@@ -439,6 +439,12 @@ const AccommodationForm: React.FC = () => {
             if (!formData.maxPersonsVilla || formData.maxPersonsVilla <= 0) {
                 newErrors.maxPersonsVilla =
                     "Maximum persons must be greater than 0";
+            } else if (
+                formData.type === "Cottage" &&
+                formData.maxPersonsVilla > formData.capacity
+            ) {
+                newErrors.maxPersonsVilla =
+                    "Included guests cannot exceed max guests per room";
             }
         }
 
@@ -812,7 +818,9 @@ const AccommodationForm: React.FC = () => {
                                     htmlFor="capacity"
                                     className="block text-sm font-medium text-gray-700"
                                 >
-                                    Capacity *
+                                    {formData.type === "Cottage"
+                                        ? "Max guests per room *"
+                                        : "Capacity *"}
                                 </label>
                                 <div className="mt-1">
                                     <input
@@ -831,6 +839,12 @@ const AccommodationForm: React.FC = () => {
                                     {errors.capacity && (
                                         <p className="mt-1 text-sm text-red-600">
                                             {errors.capacity}
+                                        </p>
+                                    )}
+                                    {formData.type === "Cottage" && (
+                                        <p className="mt-1 text-xs text-gray-500">
+                                            Hard limit for one room. Guests
+                                            cannot exceed this.
                                         </p>
                                     )}
                                 </div>
@@ -974,6 +988,14 @@ const AccommodationForm: React.FC = () => {
                                             {errors.maxPersonsVilla && (
                                                 <p className="mt-1 text-sm text-red-600">
                                                     {errors.maxPersonsVilla}
+                                                </p>
+                                            )}
+                                            {formData.type === "Cottage" && (
+                                                <p className="mt-1 text-xs text-gray-500">
+                                                    Included in the room price.
+                                                    Extra adult/child charges
+                                                    apply after this, up to max
+                                                    guests per room.
                                                 </p>
                                             )}
                                         </div>

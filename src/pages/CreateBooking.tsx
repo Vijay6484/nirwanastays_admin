@@ -229,11 +229,13 @@ const CreateBooking: React.FC = () => {
                 weekendAdultPrice: data.packages?.pricing?.weekendAdult || 0,
                 weekendChildPrice: data.packages?.pricing?.weekendChild || 0,
                 extraAdultRate: data.basicInfo?.RatePersonVilla || 0,
-                maxPersonsIncluded:
+                maxPersonsIncluded: Math.min(
                     data.basicInfo?.MaxPersonVilla ||
-                    data.packages?.pricing?.maxGuests ||
-                    data.basicInfo?.capacity ||
-                    2,
+                        data.packages?.pricing?.maxGuests ||
+                        data.basicInfo?.capacity ||
+                        2,
+                    data.basicInfo?.capacity || 2,
+                ),
                 capacity: data.basicInfo?.capacity || 4,
             };
             setSelectedAccommodation(accommodation);
